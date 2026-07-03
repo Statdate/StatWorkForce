@@ -24,7 +24,12 @@ async function saveSyncedMap(map: Record<string, string>) {
 }
 
 async function getWritableCalendar() {
-  const { status } = await Calendar.requestCalendarPermissions();
+  // Must pass `true` to actually request the write-only permission — the
+  // app.json config plugin (writeOnlyAccess: true) only adds the
+  // NSCalendarsWriteOnlyAccessUsageDescription Info.plist key, not the full-
+  // access one, so calling this with no argument (which asks for full
+  // access) throws at runtime instead of prompting.
+  const { status } = await Calendar.requestCalendarPermissions(true);
   if (status !== "granted") {
     throw new Error("Calendar permission was denied.");
   }
