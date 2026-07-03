@@ -75,6 +75,34 @@ export async function getApprovalQueue(unitId: string) {
   });
 }
 
+/** Approve or reject a timecard entry. Scoped by checking the entry's owner
+ * shares a unit with the manager — the entry itself doesn't carry a unitId
+ * since TimeEntry can be standalone (not tied to a Shift). */
+export async function setTimeEntryApproval(
+  timeEntryId: string,
+  approvalStatus: "APPROVED" | "REJECTED"
+) {
+  const user = await requireRole("MANAGER", "ADMIN");
+  const allowedUnitIds = scopedUnitIds(user);
+
+  const entry = await prisma.timeEntry.findUnique({
+    where: { id: timeEntryId },
+    include: { user: { select: { unitMemberships: { select: { unitId: true } } } } },
+  });
+  if (!entry) throw new Error("Time entry not found");
+
+  if (allowedUnitIds !== null) {
+    const entryUnitIds = entry.user.unitMemberships.map((m) => m.unitId);
+    const inScope = entryUnitIds.some((id) => allowedUnitIds.includes(id));
+    if (!inScope) throw new Error(`Timecard owner is not in the current manager's scope`);
+  }
+
+  await prisma.timeEntry.update({
+    where: { id: timeEntryId },
+    data: { approvalStatus, approvedById: user.id, approvedAt: new Date() },
+  });
+}
+
 export async function getUnitStaff(unitId: string) {
   await assertUnitInScope(unitId);
 

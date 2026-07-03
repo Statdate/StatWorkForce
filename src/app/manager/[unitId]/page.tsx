@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { getManagerUnits, getUnitCensus, getApprovalQueue, getUnitStaff } from "@/lib/data/manager";
+import { approveTimeEntryAction, rejectTimeEntryAction } from "@/app/actions/timecards";
 import { DashboardShell } from "@/components/dashboard-shell";
 
 export default async function ManagerUnitPage({
@@ -27,21 +28,28 @@ export default async function ManagerUnitPage({
     getUnitStaff(unitId),
   ]);
 
-  const nav = units.length > 1 && (
-    <div className="flex gap-2">
-      {units.map((unit) => (
-        <Link
-          key={unit.id}
-          href={`/manager/${unit.id}`}
-          className={`rounded-full px-3 py-1 text-sm ${
-            unit.id === unitId
-              ? "bg-slate-900 text-white"
-              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          }`}
-        >
-          {unit.name}
-        </Link>
-      ))}
+  const nav = (
+    <div className="flex flex-wrap gap-2">
+      {units.length > 1 &&
+        units.map((unit) => (
+          <Link
+            key={unit.id}
+            href={`/manager/${unit.id}`}
+            className={`rounded-full px-3 py-1 text-sm ${
+              unit.id === unitId
+                ? "bg-slate-900 text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            {unit.name}
+          </Link>
+        ))}
+      <Link
+        href={`/manager/${unitId}/messages`}
+        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
+      >
+        Messages
+      </Link>
     </div>
   );
 
@@ -111,9 +119,7 @@ export default async function ManagerUnitPage({
 
       <section className="mt-10">
         <h2 className="text-lg font-medium text-slate-900">Timecard approval queue</h2>
-        <p className="text-xs text-slate-400">
-          Approve by the Friday before payday week. (Approval actions are not wired up yet in this scaffold.)
-        </p>
+        <p className="text-xs text-slate-400">Approve by the Friday before payday week.</p>
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {approvalQueue.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">Nothing pending approval.</p>
@@ -125,6 +131,7 @@ export default async function ManagerUnitPage({
                   <th className="px-4 py-2">Entry type</th>
                   <th className="px-4 py-2">Timestamp</th>
                   <th className="px-4 py-2">Source</th>
+                  <th className="px-4 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,6 +143,30 @@ export default async function ManagerUnitPage({
                     <td className="px-4 py-2">{entry.type}</td>
                     <td className="px-4 py-2">{entry.timestamp.toLocaleString()}</td>
                     <td className="px-4 py-2">{entry.source}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-3">
+                        <form action={approveTimeEntryAction}>
+                          <input type="hidden" name="timeEntryId" value={entry.id} />
+                          <input type="hidden" name="unitId" value={unitId} />
+                          <button
+                            type="submit"
+                            className="text-xs font-medium text-emerald-700 hover:text-emerald-900"
+                          >
+                            Approve
+                          </button>
+                        </form>
+                        <form action={rejectTimeEntryAction}>
+                          <input type="hidden" name="timeEntryId" value={entry.id} />
+                          <input type="hidden" name="unitId" value={unitId} />
+                          <button
+                            type="submit"
+                            className="text-xs font-medium text-red-600 hover:text-red-800"
+                          >
+                            Reject
+                          </button>
+                        </form>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -152,9 +183,19 @@ export default async function ManagerUnitPage({
               key={membership.id}
               className="rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm"
             >
-              <p className="font-medium text-slate-900">
-                {membership.user.firstName} {membership.user.lastName}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="font-medium text-slate-900">
+                  {membership.user.firstName} {membership.user.lastName}
+                </p>
+                {membership.user.accountType === "WORKER" && (
+                  <Link
+                    href={`/manager/${unitId}/messages/${membership.user.id}`}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-900"
+                  >
+                    Message
+                  </Link>
+                )}
+              </div>
               <p className="text-slate-500">
                 {membership.user.jobType?.name ?? "No job type set"} ·{" "}
                 {membership.user.accountType.toLowerCase()}

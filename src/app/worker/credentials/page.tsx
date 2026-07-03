@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/dal";
 import { getMyCredentials } from "@/lib/data/worker";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { WorkerNav } from "@/components/worker-nav";
 
 const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
 
@@ -17,19 +17,7 @@ function credentialStatus(expirationDate: Date) {
 export default async function WorkerCredentialsPage() {
   const [user, credentials] = await Promise.all([getCurrentUser(), getMyCredentials()]);
 
-  const nav = (
-    <div className="flex gap-2">
-      <Link
-        href="/worker"
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        My schedule
-      </Link>
-      <Link href="/worker/credentials" className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">
-        My credentials
-      </Link>
-    </div>
-  );
+  const nav = <WorkerNav active="/worker/credentials" />;
 
   return (
     <DashboardShell roleLabel="Worker" userName={`${user.firstName} ${user.lastName}`} nav={nav}>

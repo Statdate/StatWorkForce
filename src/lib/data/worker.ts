@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, scopedUnitIds } from "@/lib/dal";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -13,6 +13,73 @@ export async function getMySchedule() {
       shift: { include: { unit: true, jobType: true } },
     },
     orderBy: { shift: { startTime: "asc" } },
+  });
+}
+
+/** Upcoming shifts in the worker's unit(s) they haven't already signed up for.
+ * Priority-tier open/close windows aren't enforced yet (that policy is still
+ * undefined — see README "Decisions needed"); every unit member currently
+ * sees the same open-shift list regardless of tier. */
+export async function getOpenShifts() {
+  const user = await getCurrentUser();
+  const unitIds = scopedUnitIds(user) ?? [];
+  if (unitIds.length === 0) return [];
+
+  const shifts = await prisma.shift.findMany({
+    where: { unitId: { in: unitIds }, startTime: { gte: new Date() } },
+    include: {
+      unit: { select: { name: true } },
+      jobType: { select: { name: true } },
+      assignments: {
+        where: { status: { not: "DROPPED" } },
+        select: { userId: true },
+      },
+    },
+    orderBy: { startTime: "asc" },
+  });
+
+  return shifts
+    .filter((shift) => !shift.assignments.some((a) => a.userId === user.id))
+    .map((shift) => ({
+      ...shift,
+      signedUpCount: shift.assignments.length,
+    }));
+}
+
+export async function signUpForShift(shiftId: string) {
+  const user = await getCurrentUser();
+
+  const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
+  if (!shift) throw new Error("Shift not found");
+
+  const unitIds = scopedUnitIds(user) ?? [];
+  if (!unitIds.includes(shift.unitId)) {
+    throw new Error("You aren't assigned to this unit");
+  }
+
+  await prisma.scheduleAssignment.upsert({
+    where: { shiftId_userId: { shiftId, userId: user.id } },
+    update: { status: "SELF_SCHEDULED" },
+    create: { shiftId, userId: user.id, status: "SELF_SCHEDULED" },
+  });
+}
+
+export async function dropShift(shiftId: string) {
+  const user = await getCurrentUser();
+
+  const assignment = await prisma.scheduleAssignment.findUnique({
+    where: { shiftId_userId: { shiftId, userId: user.id } },
+  });
+  if (!assignment || assignment.userId !== user.id) {
+    throw new Error("No signup found to cancel");
+  }
+  if (assignment.status !== "SELF_SCHEDULED") {
+    throw new Error("Only self-scheduled signups can be cancelled here — ask your manager about assigned shifts");
+  }
+
+  await prisma.scheduleAssignment.update({
+    where: { id: assignment.id },
+    data: { status: "DROPPED" },
   });
 }
 

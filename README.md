@@ -136,10 +136,22 @@ One real bug was caught and fixed during this pass: `prisma/seed.ts` used
 `Date.setHours()` (which returns a number, not a `Date`) when building shift
 times — fixed via a `shiftTimeOnDay()` helper that returns a proper `Date`.
 
-Not yet exercised: self-scheduling/sign-up flows, timecard approval actions,
-message sending, and credential upload — none of those have interactive
-server actions wired up yet in this scaffold (see "Decisions needed" below
-and the code comments marking them as not wired up).
+A second pass added the interactive pieces and re-verified end to end against
+a fresh local database:
+
+- **Worker self-scheduling** — the worker schedule page shows open shifts in
+  their unit(s) with live signup counts; sign-up creates a `SELF_SCHEDULED`
+  assignment, cancel reverts it to `DROPPED`. Verified both directions.
+- **Manager timecard approval** — Approve/Reject buttons on the approval
+  queue call `setTimeEntryApproval`, scoped so a manager can only act on
+  entries from workers who share one of their units. Verified an approval
+  clearing the queue.
+- **Manager↔worker private messaging** — two-way threads scoped to
+  unit-sharing manager/worker pairs, with unread counts. Verified sending in
+  both directions and the unread badge clearing on open.
+
+Not yet exercised: credential upload (no file storage provider chosen yet)
+and admin call-in handling actions — those remain read-only in this pass.
 
 ## Project structure
 
@@ -154,11 +166,18 @@ src/lib/dal.ts              Data Access Layer — verifySession(), getCurrentUse
                             requireRole(), scopedUnitIds(). Every data query
                             in src/lib/data/* goes through this.
 src/lib/data/admin.ts       Admin-only queries (org-wide)
-src/lib/data/manager.ts     Manager queries, hard-scoped to their unit(s)
-src/lib/data/worker.ts      Worker queries, hard-scoped to their own userId
+src/lib/data/manager.ts     Manager queries, hard-scoped to their unit(s);
+                            timecard approve/reject
+src/lib/data/worker.ts      Worker queries, hard-scoped to their own userId;
+                            open-shift sign-up/cancel
+src/lib/data/messages.ts    Manager<->worker messaging, scoped to shared units
+src/app/actions/            Server actions (login, schedule sign-up/drop,
+                            timecard approve/reject, send message)
 src/app/admin/              Admin dashboard (org/unit overview, call-ins)
-src/app/manager/[unitId]/   Manager dashboard (census, schedule, approval queue)
-src/app/worker/             Worker dashboard (my schedule, my credentials)
+src/app/manager/[unitId]/   Manager dashboard (census, schedule, approval
+                            queue, messages)
+src/app/worker/             Worker dashboard (my schedule + open shifts, my
+                            credentials, messages)
 src/app/login/              Badge number + password login
 ```
 
