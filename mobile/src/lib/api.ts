@@ -57,6 +57,7 @@ export function getMe() {
 
 export type ScheduleAssignment = {
   id: string;
+  shiftId: string;
   status: string;
   shift: {
     startTime: string;
@@ -80,6 +81,64 @@ export type Credential = {
 
 export function getCredentials() {
   return request<{ credentials: Credential[] }>("/api/credentials");
+}
+
+export type OpenShift = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  requiredCount: number;
+  signedUpCount: number;
+  unit: { name: string };
+  jobType: { name: string };
+};
+
+export function getOpenShifts() {
+  return request<{ shifts: OpenShift[] }>("/api/schedule/open");
+}
+
+export function signUpForShift(shiftId: string) {
+  return request<{ ok: true }>("/api/schedule/signup", {
+    method: "POST",
+    body: JSON.stringify({ shiftId }),
+  });
+}
+
+export function dropShift(shiftId: string) {
+  return request<{ ok: true }>("/api/schedule/drop", {
+    method: "POST",
+    body: JSON.stringify({ shiftId }),
+  });
+}
+
+export type MessageThread = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  unreadCount: number;
+};
+
+export function getMessageThreads() {
+  return request<{ threads: MessageThread[] }>("/api/messages/threads");
+}
+
+export type Message = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  sentAt: string;
+};
+
+export function getConversation(partnerId: string) {
+  return request<{ messages: Message[] }>(`/api/messages/${partnerId}`);
+}
+
+export function sendMessage(recipientId: string, body: string) {
+  return request<{ ok: true }>("/api/messages/send", {
+    method: "POST",
+    body: JSON.stringify({ recipientId, body }),
+  });
 }
 
 export { TOKEN_KEY };

@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, scopedUnitIds } from "@/lib/dal";
+import { getCurrentUser, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -28,6 +28,12 @@ export async function getScheduleForUser(userId: string) {
  * sees the same open-shift list regardless of tier. */
 export async function getOpenShifts() {
   const user = await getCurrentUser();
+  return getOpenShiftsForUser(user);
+}
+
+/** Core logic split from getOpenShifts() — takes a resolved user (web's
+ * getCurrentUser() or mobile's getApiUser()) instead of fetching it itself. */
+export async function getOpenShiftsForUser(user: CurrentUser) {
   const unitIds = scopedUnitIds(user) ?? [];
   if (unitIds.length === 0) return [];
 
@@ -54,7 +60,11 @@ export async function getOpenShifts() {
 
 export async function signUpForShift(shiftId: string) {
   const user = await getCurrentUser();
+  return signUpForShiftAsUser(user, shiftId);
+}
 
+/** Core logic split from signUpForShift() — see getOpenShiftsForUser(). */
+export async function signUpForShiftAsUser(user: CurrentUser, shiftId: string) {
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) throw new Error("Shift not found");
 
@@ -72,11 +82,15 @@ export async function signUpForShift(shiftId: string) {
 
 export async function dropShift(shiftId: string) {
   const user = await getCurrentUser();
+  return dropShiftAsUser(user.id, shiftId);
+}
 
+/** Core logic split from dropShift() — see getOpenShiftsForUser(). */
+export async function dropShiftAsUser(userId: string, shiftId: string) {
   const assignment = await prisma.scheduleAssignment.findUnique({
-    where: { shiftId_userId: { shiftId, userId: user.id } },
+    where: { shiftId_userId: { shiftId, userId } },
   });
-  if (!assignment || assignment.userId !== user.id) {
+  if (!assignment || assignment.userId !== userId) {
     throw new Error("No signup found to cancel");
   }
   if (assignment.status !== "SELF_SCHEDULED") {

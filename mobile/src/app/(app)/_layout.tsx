@@ -17,6 +17,7 @@ export default function AppTabsLayout() {
     <Tabs screenOptions={{ headerRight: () => <SignOutButton /> }}>
       <Tabs.Screen name="index" options={{ title: 'My Schedule' }} />
       <Tabs.Screen name="credentials" options={{ title: 'My Credentials' }} />
+      <Tabs.Screen name="messages" options={{ title: 'Messages', headerShown: false }} />
     </Tabs>
   );
 }

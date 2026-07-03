@@ -278,31 +278,47 @@ API layer rather than the cookie-based web session:
   Same signed-JWT format as the web session (`src/lib/session.ts`), just
   handed back in a JSON body instead of an httpOnly cookie, since a mobile
   client stores it itself.
-- `GET /api/me`, `GET /api/schedule`, `GET /api/credentials` — Bearer-token
-  authenticated, read-only for v1. `src/lib/dal.ts`'s `getApiUser()` is the
-  non-redirecting counterpart to `getCurrentUser()`: a 302 to `/login` makes
-  no sense as a JSON response, so these return a plain 401 instead.
-- `src/proxy.ts` now excludes `/api/*` from its redirect gate entirely — API
+- `GET /api/me`, `GET /api/schedule`, `GET /api/credentials` — read-only,
+  Bearer-token authenticated.
+- `GET /api/schedule/open`, `POST /api/schedule/signup`,
+  `POST /api/schedule/drop` — self-scheduling, same rules as the web version
+  (unit-membership check on sign-up, self-scheduled-only on cancel).
+- `GET /api/messages/threads`, `GET /api/messages/[partnerId]`,
+  `POST /api/messages/send` — manager<->worker messaging, same
+  shared-unit scoping as the web version.
+- All of the above are `getApiUser()`-gated: `src/lib/dal.ts`'s
+  non-redirecting counterpart to `getCurrentUser()`, since a 302 to `/login`
+  makes no sense as a JSON response — these return a plain 401 instead.
+- `src/proxy.ts` excludes `/api/*` from its redirect gate entirely — API
   routes verify their own auth via `getApiUser()`, matching the Next.js
   data-security guidance that Proxy coverage shouldn't be the only check.
+- The core query/mutation logic in `src/lib/data/worker.ts` and
+  `src/lib/data/messages.ts` is split into a redirect-on-miss web wrapper
+  (`getMySchedule()`, `sendMessage()`, etc.) and a core function taking an
+  already-resolved user (`getScheduleForUser()`, `sendMessageAsUser()`,
+  etc.) — the API routes call the core functions directly with
+  `getApiUser()`'s result, so there's exactly one copy of each rule
+  (unit scoping, self-scheduled-only cancel, shared-unit messaging), not one
+  per client.
 
 Mobile app structure (`mobile/src/`):
 
 ```
-lib/storage.ts         SecureStore on native, localStorage on web
-lib/api.ts              fetch wrapper, attaches Authorization: Bearer <token>
-lib/auth-context.tsx    AuthProvider/useAuth — signIn/signOut/user/isLoading
-app/_layout.tsx         Stack.Protected guard on auth state (Expo Router's
-                        current recommended auth pattern)
-app/sign-in.tsx         badge number + password
-app/(app)/_layout.tsx   Tabs — My Schedule, My Credentials
+lib/storage.ts          SecureStore on native, localStorage on web
+lib/api.ts               fetch wrapper, attaches Authorization: Bearer <token>
+lib/auth-context.tsx     AuthProvider/useAuth — signIn/signOut/user/isLoading
+app/_layout.tsx          Stack.Protected guard on auth state (Expo Router's
+                         current recommended auth pattern)
+app/sign-in.tsx          badge number + password
+app/(app)/_layout.tsx    Tabs — My Schedule, My Credentials, Messages
+app/(app)/index.tsx      My Shifts + Open Shifts (sign up / cancel)
+app/(app)/messages/      nested Stack: thread list -> conversation detail
 ```
 
-Scope for this pass, matching what the original spec described for mobile
-("view schedule... sync to phone calendar... credential status"): **read-only**
-— view schedule, view credentials. Self-scheduling, messaging, and the
-calendar-sync/pre-shift-alarm features from the spec aren't in the mobile
-app yet.
+Scope: view schedule, self-schedule (sign up/cancel open shifts), view
+credentials, and manager<->worker messaging — matching everything the
+original spec described for mobile except calendar-sync/pre-shift-alarm,
+which isn't built yet.
 
 ### Running the mobile app
 
@@ -324,12 +340,18 @@ means the device itself, not your dev machine.
   real native build) is the correct path, but that needs **CocoaPods**,
   which isn't installed in the sandbox this was built in. Not something I
   worked around — `gem install cocoapods` (or Homebrew) would unblock it.
-- Verified instead via `npx expo start --web`: logged in as a seeded worker,
-  confirmed the schedule and credentials screens render real data from the
-  live API routes, and sign-out correctly returns to the sign-in screen
-  (`Stack.Protected` guard reacting to auth state). This exercises the same
-  React components and API calls a native build would — just not the actual
-  native container.
+- Verified instead via `npx expo start --web` against a freshly migrated and
+  seeded database: logged in as a seeded worker; cancelled a self-scheduled
+  shift and watched it move to Open Shifts with the signup count updating;
+  signed back up and watched it move back; opened the Messages tab, sent a
+  message to the unit's manager, and saw it render as a bubble with a
+  timestamp; sign-out correctly returned to the sign-in screen
+  (`Stack.Protected` guard reacting to auth state). Every new API route
+  (`/api/schedule/open`, `/signup`, `/drop`, `/api/messages/threads`,
+  `/api/messages/[partnerId]`, `/api/messages/send`) was also hit directly
+  with curl first to confirm the backend logic independent of the UI. This
+  exercises the same React components and API calls a native build would —
+  just not the actual native container.
 - Before relying on this for real device testing, install CocoaPods and run
   `npx expo run:ios` (or `run:android`) at least once to confirm the native
   build itself works — Expo web can't catch native-module-specific issues.

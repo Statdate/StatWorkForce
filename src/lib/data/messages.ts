@@ -1,13 +1,14 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requireRole, scopedUnitIds } from "@/lib/dal";
+import { getCurrentUser, requireRole, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 
 type ThreadPartner = { id: string; firstName: string; lastName: string };
 
 /** Manager<->worker messaging only (per spec: managers message "their staff").
- * Both directions require the pair to share a unit. */
-async function assertCanMessage(otherUserId: string) {
-  const user = await getCurrentUser();
+ * Both directions require the pair to share a unit. Takes an already-resolved
+ * user so mobile API routes can pass in getApiUser()'s result instead of the
+ * redirect-on-miss getCurrentUser(). */
+async function assertCanMessageAsUser(user: CurrentUser, otherUserId: string) {
   if (user.id === otherUserId) throw new Error("Can't message yourself");
 
   const other = await prisma.user.findUnique({
@@ -32,7 +33,13 @@ async function assertCanMessage(otherUserId: string) {
 }
 
 export async function getConversation(otherUserId: string) {
-  const { user } = await assertCanMessage(otherUserId);
+  const user = await getCurrentUser();
+  return getConversationForUser(user, otherUserId);
+}
+
+/** Core logic split from getConversation() — see assertCanMessageAsUser(). */
+export async function getConversationForUser(user: CurrentUser, otherUserId: string) {
+  await assertCanMessageAsUser(user, otherUserId);
 
   const messages = await prisma.message.findMany({
     where: {
@@ -53,7 +60,13 @@ export async function getConversation(otherUserId: string) {
 }
 
 export async function sendMessage(recipientId: string, body: string) {
-  const { user } = await assertCanMessage(recipientId);
+  const user = await getCurrentUser();
+  return sendMessageAsUser(user, recipientId, body);
+}
+
+/** Core logic split from sendMessage() — see assertCanMessageAsUser(). */
+export async function sendMessageAsUser(user: CurrentUser, recipientId: string, body: string) {
+  await assertCanMessageAsUser(user, recipientId);
   const trimmed = body.trim();
   if (!trimmed) throw new Error("Message can't be empty");
 
@@ -66,6 +79,11 @@ export async function sendMessage(recipientId: string, body: string) {
  * Each partner comes back with a count of unread messages from them. */
 export async function getMessageThreads() {
   const user = await getCurrentUser();
+  return getMessageThreadsForUser(user);
+}
+
+/** Core logic split from getMessageThreads() — see assertCanMessageAsUser(). */
+export async function getMessageThreadsForUser(user: CurrentUser) {
   const unitIds = scopedUnitIds(user) ?? [];
   if (unitIds.length === 0 || (user.accountType !== "MANAGER" && user.accountType !== "WORKER")) {
     return [];
