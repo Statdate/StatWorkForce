@@ -366,10 +366,27 @@ means the device itself, not your dev machine.
 ### Verified so far / known gaps
 
 - **Expo Go doesn't support SDK 57 yet** (too new) — `npx expo run:ios` (a
-  real native build) is the correct path, but that needs **CocoaPods**,
-  which isn't installed in the sandbox this was built in. Not something I
-  worked around — `gem install cocoapods` (or Homebrew) would unblock it.
-- Verified instead via `npx expo start --web` against a freshly migrated and
+  real native build) is the correct path, and it needs **CocoaPods**. This
+  Mac's system Ruby (2.6.10) was too old for CocoaPods, and there was no
+  Homebrew/rbenv/rvm/asdf either. Fixed: installed Homebrew at the standard
+  `/opt/homebrew` prefix (needed one `sudo mkdir && sudo chown` from Anthony
+  first, since `/opt` requires root), then `brew install cocoapods` — pulled
+  in a modern bottled Ruby alongside it, no source builds needed.
+- **`npx expo run:ios` succeeded**: pods installed, all native modules
+  (Reanimated, gesture-handler, `expo-calendar`, etc.) compiled, 0 errors,
+  and the app installed onto a booted iPhone 17 Pro Simulator (confirmed on
+  disk — `com.anonymous.statworkforce` in the simulator's app container).
+- **Not yet confirmed: actually driving the running app.** Both
+  computer-use (blocked — "can't be approved during a scheduled run") and
+  `xcrun simctl launch`/`listapps` (hung indefinitely, while `simctl list
+  devices` worked fine) failed in the environment this was built in,
+  consistent with no interactive GUI session being attached there. So the
+  literal "tap Sync to Calendar, check the Calendar app for the event and
+  alarm" step has not been done yet, even though the build and install are
+  confirmed working. Backend + Metro bundler were left running for a quick
+  pickup: open Simulator.app, find "Stat Workforce," log in with badge
+  `30001` (`Password123!`), tap **Sync to Calendar**, check Calendar.
+- Verified via `npx expo start --web` against a freshly migrated and
   seeded database: logged in as a seeded worker; cancelled a self-scheduled
   shift and watched it move to Open Shifts with the signup count updating;
   signed back up and watched it move back; opened the Messages tab, sent a
@@ -380,23 +397,15 @@ means the device itself, not your dev machine.
   `/api/messages/[partnerId]`, `/api/messages/send`) was also hit directly
   with curl first to confirm the backend logic independent of the UI. This
   exercises the same React components and API calls a native build would —
-  just not the actual native container.
-- Before relying on this for real device testing, install CocoaPods and run
-  `npx expo run:ios` (or `run:android`) at least once to confirm the native
-  build itself works — Expo web can't catch native-module-specific issues.
-- **Calendar sync could not be exercised at all in this environment** —
-  `expo-calendar` has zero web support (unlike the rest of the app) and
-  isn't supported in Expo Go either, so with no CocoaPods and no physical
-  device available here, there was no way to trigger a real permission
-  prompt or confirm an event actually lands in a calendar app with the
-  correct alarm. What *was* verified: the publish flow end-to-end on web
-  (Publish button → `SchedulePeriod.status` flips to `PUBLISHED` →
+  just not (yet) the actual native container's runtime behavior.
+- **Calendar sync specifically**: the publish flow was verified end-to-end
+  on web (Publish button → `SchedulePeriod.status` flips to `PUBLISHED` →
   `/api/schedule` reflects it), the "Published" badge and calendar-sync UI
-  rendering correctly in the Expo web preview (correctly showing "Calendar
+  render correctly in the Expo web preview (correctly showing "Calendar
   sync requires the native app" instead of a crash, since `expo-calendar`
   is guarded behind a `Platform.OS !== 'web'` check), the alarm-offset
-  input persisting across reloads, and `tsc --noEmit` passing for
-  `src/lib/calendar.ts` against the documented SDK 57 API. The actual
-  `calendar.createEvent(...)` call and its alarm has not been confirmed
-  against a real calendar app — treat that specific path as unverified
-  until someone runs it on a device or a CocoaPods-enabled build.
+  input persists across reloads, and `tsc --noEmit` passes for
+  `src/lib/calendar.ts` against the documented SDK 57 API, and the native
+  build compiles the module cleanly. The one thing not yet confirmed is the
+  actual `calendar.createEvent(...)` write and alarm landing in a real
+  calendar app — see the pickup steps above.

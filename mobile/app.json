@@ -8,7 +8,8 @@
     "scheme": "statworkforce",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.anonymous.statworkforce"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +19,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["READ_CALENDAR", "WRITE_CALENDAR"]
+      "permissions": [
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     },
     "web": {
       "output": "static",
