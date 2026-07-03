@@ -23,19 +23,42 @@ async function saveSyncedMap(map: Record<string, string>) {
   await setItem(SYNCED_MAP_KEY, JSON.stringify(map));
 }
 
-async function getWritableCalendar() {
-  // Must pass `true` to actually request the write-only permission — the
-  // app.json config plugin (writeOnlyAccess: true) only adds the
-  // NSCalendarsWriteOnlyAccessUsageDescription Info.plist key, not the full-
-  // access one, so calling this with no argument (which asks for full
-  // access) throws at runtime instead of prompting.
-  const { status } = await Calendar.requestCalendarPermissions(true);
+async function requestFullCalendarAccess() {
+  // Must request full (non-write-only) access — we call getCalendars() below
+  // to find a writable calendar, and write-only access explicitly does not
+  // grant permission to read/list calendars (see expo-calendar docs). The
+  // app.json config plugin is set up for full access (no writeOnlyAccess
+  // flag), which adds NSCalendarsFullAccessUsageDescription to Info.plist.
+  const { status } = await Calendar.requestCalendarPermissions();
   if (status !== "granted") {
     throw new Error("Calendar permission was denied.");
   }
+}
+
+export type PickableCalendar = {
+  id: string;
+  title: string;
+  sourceName: string;
+};
+
+/** Calendars the user could plausibly want to sync shifts into. */
+export async function listWritableCalendars(): Promise<PickableCalendar[]> {
+  await requestFullCalendarAccess();
+  const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+  return calendars
+    .filter((c) => c.allowsModifications)
+    .map((c) => ({ id: c.id, title: c.title, sourceName: c.source?.name ?? 'Unknown' }));
+}
+
+async function getWritableCalendar(preferredCalendarId: string | null) {
+  await requestFullCalendarAccess();
 
   const calendars = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
+  const preferred = preferredCalendarId
+    ? calendars.find((c) => c.id === preferredCalendarId && c.allowsModifications)
+    : undefined;
   const writable =
+    preferred ??
     calendars.find((c) => c.isPrimary && c.allowsModifications) ??
     calendars.find((c) => c.allowsModifications);
 
@@ -58,13 +81,14 @@ export type SyncResult = {
  * calendar entries. */
 export async function syncAssignmentsToCalendar(
   assignments: ScheduleAssignment[],
-  alarmOffsetMinutes: number
+  alarmOffsetMinutes: number,
+  preferredCalendarId: string | null = null
 ): Promise<SyncResult> {
   if (!CALENDAR_SYNC_SUPPORTED) {
     throw new Error("Calendar sync isn't available in the web preview — try the native app.");
   }
 
-  const calendar = await getWritableCalendar();
+  const calendar = await getWritableCalendar(preferredCalendarId);
   const syncedMap = await getSyncedMap();
 
   const syncable = assignments.filter(

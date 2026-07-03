@@ -43,9 +43,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Stat Workforce would like to add your published shifts to your calendar.",
-          "writeOnlyCalendarPermission": "Stat Workforce would like to add your published shifts to your calendar.",
-          "writeOnlyAccess": true
+          "calendarPermission": "Stat Workforce would like to add your published shifts to your calendar."
         }
       ]
     ],
