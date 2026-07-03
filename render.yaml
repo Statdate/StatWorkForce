@@ -1,5 +1,5 @@
 # Render Blueprint — provisions the web service + managed Postgres described
-# in README.md. Not yet applied to a real Render account; review before use.
+# in README.md.
 # https://render.com/docs/blueprint-spec
 
 databases:
@@ -24,5 +24,8 @@ services:
           property: connectionString
       - key: SESSION_SECRET
         sync: false
-      - key: NODE_ENV
-        value: production
+      # Deliberately NOT setting NODE_ENV here: Render sets it to "production"
+      # for the running service automatically, but declaring it as an envVar
+      # also applies it during the build phase, which makes `npm install`
+      # skip devDependencies (tailwindcss, @tailwindcss/postcss, typescript)
+      # that `next build` needs. Learned this the hard way on the first deploy.
