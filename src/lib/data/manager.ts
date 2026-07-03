@@ -103,6 +103,35 @@ export async function setTimeEntryApproval(
   });
 }
 
+/** Schedule periods for a unit, most recent first — the draft/published gate
+ * behind "sync to calendar" (only published shifts are meant to be synced). */
+export async function getSchedulePeriods(unitId: string) {
+  await assertUnitInScope(unitId);
+
+  return prisma.schedulePeriod.findMany({
+    where: { unitId },
+    include: { publishedBy: { select: { firstName: true, lastName: true } } },
+    orderBy: { startDate: "desc" },
+  });
+}
+
+export async function publishSchedulePeriod(schedulePeriodId: string) {
+  const user = await requireRole("MANAGER", "ADMIN");
+
+  const period = await prisma.schedulePeriod.findUnique({ where: { id: schedulePeriodId } });
+  if (!period) throw new Error("Schedule period not found");
+
+  const allowedUnitIds = scopedUnitIds(user);
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(period.unitId)) {
+    throw new Error(`Unit ${period.unitId} is not in the current manager's scope`);
+  }
+
+  await prisma.schedulePeriod.update({
+    where: { id: schedulePeriodId },
+    data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: user.id },
+  });
+}
+
 export async function getUnitStaff(unitId: string) {
   await assertUnitInScope(unitId);
 

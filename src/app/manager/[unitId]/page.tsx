@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
-import { getManagerUnits, getUnitCensus, getApprovalQueue, getUnitStaff } from "@/lib/data/manager";
+import {
+  getManagerUnits,
+  getUnitCensus,
+  getApprovalQueue,
+  getUnitStaff,
+  getSchedulePeriods,
+} from "@/lib/data/manager";
 import { approveTimeEntryAction, rejectTimeEntryAction } from "@/app/actions/timecards";
+import { publishSchedulePeriodAction } from "@/app/actions/schedulePeriods";
 import { DashboardShell } from "@/components/dashboard-shell";
 
 export default async function ManagerUnitPage({
@@ -21,11 +28,12 @@ export default async function ManagerUnitPage({
   const now = new Date();
   const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [user, shifts, approvalQueue, staff] = await Promise.all([
+  const [user, shifts, approvalQueue, staff, schedulePeriods] = await Promise.all([
     getCurrentUser(),
     getUnitCensus(unitId, now, twoWeeksOut),
     getApprovalQueue(unitId),
     getUnitStaff(unitId),
+    getSchedulePeriods(unitId),
   ]);
 
   const nav = (
@@ -114,6 +122,64 @@ export default async function ManagerUnitPage({
               )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-medium text-slate-900">Schedule periods</h2>
+        <p className="text-xs text-slate-400">
+          Publishing lets workers sync that period&apos;s shifts to their phone calendar.
+        </p>
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          {schedulePeriods.length === 0 ? (
+            <p className="p-4 text-sm text-slate-500">No schedule periods yet.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Period</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedulePeriods.map((period) => (
+                  <tr key={period.id} className="border-t border-slate-100">
+                    <td className="px-4 py-2">
+                      {period.startDate.toLocaleDateString()} – {period.endDate.toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2">
+                      {period.status === "PUBLISHED" ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Published
+                          {period.publishedBy &&
+                            ` by ${period.publishedBy.firstName} ${period.publishedBy.lastName}`}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          Draft
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      {period.status === "DRAFT" && (
+                        <form action={publishSchedulePeriodAction}>
+                          <input type="hidden" name="schedulePeriodId" value={period.id} />
+                          <input type="hidden" name="unitId" value={unitId} />
+                          <button
+                            type="submit"
+                            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                          >
+                            Publish
+                          </button>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 

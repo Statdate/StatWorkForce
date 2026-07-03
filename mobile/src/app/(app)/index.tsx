@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { SectionList, RefreshControl, StyleSheet, Pressable } from 'react-native';
+import { SectionList, RefreshControl, StyleSheet, Pressable, TextInput, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   getSchedule,
@@ -9,6 +9,8 @@ import {
   type ScheduleAssignment,
   type OpenShift,
 } from '@/lib/api';
+import { syncAssignmentsToCalendar, CALENDAR_SYNC_SUPPORTED } from '@/lib/calendar';
+import { getAlarmOffsetMinutes, setAlarmOffsetMinutes } from '@/lib/settings';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -30,6 +32,10 @@ export default function ScheduleScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null);
 
+  const [alarmOffset, setAlarmOffsetState] = useState('60');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
     setAssignments(assignments);
@@ -38,6 +44,7 @@ export default function ScheduleScreen() {
 
   useEffect(() => {
     load().finally(() => setIsLoading(false));
+    getAlarmOffsetMinutes().then((minutes) => setAlarmOffsetState(String(minutes)));
   }, [load]);
 
   async function onRefresh() {
@@ -66,6 +73,30 @@ export default function ScheduleScreen() {
     }
   }
 
+  async function handleAlarmOffsetChange(value: string) {
+    setAlarmOffsetState(value);
+    const minutes = Number(value);
+    if (Number.isFinite(minutes) && minutes >= 0) {
+      await setAlarmOffsetMinutes(minutes);
+    }
+  }
+
+  async function handleSync() {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const result = await syncAssignmentsToCalendar(assignments, Number(alarmOffset) || 0);
+      const parts = [`${result.syncedCount} added`];
+      if (result.skippedCount > 0) parts.push(`${result.skippedCount} already synced or not yet published`);
+      if (result.errorCount > 0) parts.push(`${result.errorCount} failed`);
+      setSyncMessage(parts.join(' · '));
+    } catch (error) {
+      setSyncMessage(error instanceof Error ? error.message : 'Sync failed.');
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
   const sections: Section[] = [
     { key: 'mine', title: 'My Shifts', data: assignments },
     { key: 'open', title: 'Open Shifts', data: openShifts },
@@ -79,6 +110,43 @@ export default function ScheduleScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            <ThemedView type="backgroundElement" style={styles.syncCard}>
+              <ThemedText type="smallBold">Calendar sync</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Adds your published shifts to your phone calendar with a reminder before each one.
+              </ThemedText>
+              <ThemedView style={styles.offsetRow}>
+                <ThemedText type="small">Remind me</ThemedText>
+                <TextInput
+                  value={alarmOffset}
+                  onChangeText={handleAlarmOffsetChange}
+                  keyboardType="number-pad"
+                  style={styles.offsetInput}
+                />
+                <ThemedText type="small">minutes before each shift</ThemedText>
+              </ThemedView>
+              {CALENDAR_SYNC_SUPPORTED ? (
+                <Pressable
+                  onPress={handleSync}
+                  disabled={isSyncing}
+                  style={[styles.actionButton, styles.signUpButton, styles.syncButton]}>
+                  <ThemedText type="small" style={styles.signUpText}>
+                    {isSyncing ? 'Syncing…' : 'Sync to Calendar'}
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.webNotice}>
+                  Calendar sync requires the native app (not available in the web preview).
+                </ThemedText>
+              )}
+              {syncMessage && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {syncMessage}
+                </ThemedText>
+              )}
+            </ThemedView>
+          }
           renderSectionHeader={({ section }) => (
             <ThemedView type="background" style={styles.sectionHeader}>
               <ThemedText type="smallBold">{section.title}</ThemedText>
@@ -94,9 +162,19 @@ export default function ScheduleScreen() {
           renderItem={({ item, section }) => {
             if (section.key === 'mine') {
               const assignment = item as ScheduleAssignment;
+              const isPublished = assignment.shift.schedulePeriod?.status === 'PUBLISHED';
               return (
                 <ThemedView type="backgroundElement" style={styles.card}>
-                  <ThemedText type="smallBold">{assignment.shift.unit.name}</ThemedText>
+                  <ThemedView style={styles.cardTitleRow}>
+                    <ThemedText type="smallBold">{assignment.shift.unit.name}</ThemedText>
+                    {isPublished && (
+                      <ThemedView style={styles.publishedBadge}>
+                        <ThemedText type="small" style={styles.publishedText}>
+                          Published
+                        </ThemedText>
+                      </ThemedView>
+                    )}
+                  </ThemedView>
                   <ThemedText themeColor="textSecondary">
                     {formatRange(assignment.shift.startTime, assignment.shift.endTime)}
                   </ThemedText>
@@ -151,6 +229,14 @@ const styles = StyleSheet.create({
   list: { padding: Spacing.three, gap: Spacing.two },
   sectionHeader: { paddingVertical: Spacing.two },
   card: { borderRadius: Spacing.two, padding: Spacing.three, gap: 4, marginBottom: Spacing.two },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  publishedBadge: {
+    backgroundColor: '#059669',
+    borderRadius: 999,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 2,
+  },
+  publishedText: { color: '#fff' },
   empty: { paddingVertical: Spacing.two },
   actionButton: { alignSelf: 'flex-start', marginTop: Spacing.one },
   cancelText: { color: '#dc2626' },
@@ -161,4 +247,21 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   signUpText: { color: '#fff', fontWeight: '600' },
+  syncCard: {
+    borderRadius: Spacing.two,
+    padding: Spacing.three,
+    gap: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  offsetRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, flexWrap: 'wrap' },
+  offsetInput: {
+    backgroundColor: '#fff',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 4,
+    minWidth: 50,
+    textAlign: 'center',
+  },
+  syncButton: { alignSelf: 'flex-start' },
+  webNotice: { fontStyle: Platform.OS === 'web' ? 'italic' : undefined },
 });

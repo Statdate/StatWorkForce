@@ -64,6 +64,9 @@ export type ScheduleAssignment = {
     endTime: string;
     unit: { name: string };
     jobType: { name: string };
+    // null covers standalone shifts (no schedule period at all) — treated as
+    // always syncable, only DRAFT periods hold sync back.
+    schedulePeriod: { status: "DRAFT" | "PUBLISHED" } | null;
   };
 };
 

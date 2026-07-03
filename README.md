@@ -307,18 +307,47 @@ Mobile app structure (`mobile/src/`):
 lib/storage.ts          SecureStore on native, localStorage on web
 lib/api.ts               fetch wrapper, attaches Authorization: Bearer <token>
 lib/auth-context.tsx     AuthProvider/useAuth — signIn/signOut/user/isLoading
+lib/calendar.ts          expo-calendar sync: permission, writable-calendar
+                         lookup, create events with alarms, dedupe via a
+                         local shiftId->eventId map
+lib/settings.ts          alarm-offset-minutes preference (local, per device)
 app/_layout.tsx          Stack.Protected guard on auth state (Expo Router's
                          current recommended auth pattern)
 app/sign-in.tsx          badge number + password
 app/(app)/_layout.tsx    Tabs — My Schedule, My Credentials, Messages
-app/(app)/index.tsx      My Shifts + Open Shifts (sign up / cancel)
+app/(app)/index.tsx      My Shifts + Open Shifts + Calendar sync card
 app/(app)/messages/      nested Stack: thread list -> conversation detail
 ```
 
 Scope: view schedule, self-schedule (sign up/cancel open shifts), view
-credentials, and manager<->worker messaging — matching everything the
-original spec described for mobile except calendar-sync/pre-shift-alarm,
-which isn't built yet.
+credentials, manager<->worker messaging, and calendar sync with a
+configurable pre-shift alarm — matching everything the original spec
+described for mobile.
+
+### Calendar sync + pre-shift alarm
+
+- **Publish gate.** The spec says workers sync "once a schedule is fully
+  published" — `SchedulePeriod.status` (`DRAFT`/`PUBLISHED`) already existed
+  in the schema but nothing set it. Added a **Publish** button per schedule
+  period on the manager's unit page (`src/lib/data/manager.ts`'s
+  `getSchedulePeriods()`/`publishSchedulePeriod()`); only `PUBLISHED` shifts
+  (or shifts with no period at all) are calendar-syncable. `getScheduleForUser()`
+  now includes `schedulePeriod.status` so both web and mobile can show a
+  "Published" badge and gate the sync.
+- **Sync mechanics.** `expo-calendar`'s modern API (`Calendar.requestCalendarPermissions()`
+  → `Calendar.getCalendars()` → `calendar.createEvent({..., alarms: [{ relativeOffset: -N }]})`)
+  creates one calendar event per published shift, with an alarm N minutes
+  before start. `N` is a plain number input on the My Schedule screen,
+  stored locally (device-only preference, not synced to the backend — it's
+  personal, not organizational, so this seemed like the right call rather
+  than adding a server-side setting for it).
+- **No duplicates.** A local `shiftId -> calendar event id` map means
+  re-tapping "Sync to Calendar" only creates events for shifts added since
+  the last sync, not everything again.
+- **iOS requests write-only calendar access** (`writeOnlyAccess: true` in the
+  `expo-calendar` config plugin in `app.json`) rather than full read/write —
+  the app only ever creates events, never reads the existing calendar, so
+  the narrower permission is the more honest ask.
 
 ### Running the mobile app
 
@@ -355,3 +384,19 @@ means the device itself, not your dev machine.
 - Before relying on this for real device testing, install CocoaPods and run
   `npx expo run:ios` (or `run:android`) at least once to confirm the native
   build itself works — Expo web can't catch native-module-specific issues.
+- **Calendar sync could not be exercised at all in this environment** —
+  `expo-calendar` has zero web support (unlike the rest of the app) and
+  isn't supported in Expo Go either, so with no CocoaPods and no physical
+  device available here, there was no way to trigger a real permission
+  prompt or confirm an event actually lands in a calendar app with the
+  correct alarm. What *was* verified: the publish flow end-to-end on web
+  (Publish button → `SchedulePeriod.status` flips to `PUBLISHED` →
+  `/api/schedule` reflects it), the "Published" badge and calendar-sync UI
+  rendering correctly in the Expo web preview (correctly showing "Calendar
+  sync requires the native app" instead of a crash, since `expo-calendar`
+  is guarded behind a `Platform.OS !== 'web'` check), the alarm-offset
+  input persisting across reloads, and `tsc --noEmit` passing for
+  `src/lib/calendar.ts` against the documented SDK 57 API. The actual
+  `calendar.createEvent(...)` call and its alarm has not been confirmed
+  against a real calendar app — treat that specific path as unverified
+  until someone runs it on a device or a CocoaPods-enabled build.

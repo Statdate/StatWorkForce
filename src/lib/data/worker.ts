@@ -16,7 +16,15 @@ export async function getScheduleForUser(userId: string) {
   return prisma.scheduleAssignment.findMany({
     where: { userId, status: { not: "DROPPED" } },
     include: {
-      shift: { include: { unit: true, jobType: true } },
+      shift: {
+        include: {
+          unit: true,
+          jobType: true,
+          // Status drives calendar-sync eligibility — spec says workers sync
+          // once a schedule is "fully published", not while still draft.
+          schedulePeriod: { select: { status: true } },
+        },
+      },
     },
     orderBy: { shift: { startTime: "asc" } },
   });
