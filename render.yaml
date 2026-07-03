@@ -1,0 +1,26 @@
+# Render Blueprint — provisions the web service + managed Postgres described
+# in README.md. Not yet applied to a real Render account; review before use.
+# https://render.com/docs/blueprint-spec
+
+databases:
+  - name: statworkforce-db
+    plan: free
+    databaseName: statworkforce
+    user: statworkforce
+
+services:
+  - type: web
+    name: statworkforce
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run db:generate && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: statworkforce-db
+          property: connectionString
+      - key: SESSION_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production

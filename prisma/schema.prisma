@@ -1,0 +1,380 @@
+// Stat Workforce — hospital workforce management data model.
+// See README.md for the architecture decision behind a single schema
+// covering scheduling, timekeeping, and credential tracking.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum AccountType {
+  ADMIN
+  MANAGER
+  WORKER
+}
+
+enum UnitType {
+  ICU
+  PACU
+  MED_SURG
+  ED
+  LABOR_DELIVERY
+  OR
+  NICU
+  STEP_DOWN
+  ONCOLOGY
+  BEHAVIORAL_HEALTH
+  OTHER
+}
+
+enum SchedulePeriodStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AssignmentStatus {
+  SELF_SCHEDULED
+  MANAGER_ASSIGNED
+  APPROVED
+  DROPPED
+}
+
+enum TimeEntryType {
+  CLOCK_IN
+  CLOCK_OUT
+  LUNCH_START
+  LUNCH_END
+}
+
+enum TimeEntrySource {
+  APP
+  IVR
+  MANUAL
+}
+
+enum TimeEntryApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CredentialType {
+  RN_LICENSE
+  LPN_LICENSE
+  ACLS
+  PALS
+  BLS
+  NIHSS
+  CCRN
+  CMC
+  ADVANCED_DEGREE
+  OTHER
+}
+
+enum NotificationType {
+  SCHEDULE_PUBLISHED
+  CREDENTIAL_EXPIRING_WORKER
+  CREDENTIAL_EXPIRING_MANAGER
+  TIMECARD_FLAGGED
+  MESSAGE_RECEIVED
+  GENERAL
+}
+
+enum CallInStatus {
+  OPEN
+  COVERED
+  UNRESOLVED
+}
+
+// ---------------------------------------------------------------------------
+// Org structure
+// ---------------------------------------------------------------------------
+
+model Hospital {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  units Unit[]
+  users User[]
+}
+
+model Unit {
+  id         String   @id @default(cuid())
+  hospitalId String
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  name       String
+  type       UnitType @default(OTHER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  memberships          UnitMembership[]
+  priorityGroups       PriorityGroup[]
+  schedulePeriods      SchedulePeriod[]
+  shifts               Shift[]
+  superuserAssignments SuperuserAssignment[]
+
+  @@unique([hospitalId, name])
+}
+
+model JobType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  category  String?
+  createdAt DateTime @default(now())
+
+  users  User[]
+  shifts Shift[]
+}
+
+// ---------------------------------------------------------------------------
+// Users & permissions
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String      @id @default(cuid())
+  hospitalId   String
+  hospital     Hospital    @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  accountType  AccountType
+  badgeNumber  String
+  passwordHash String
+  firstName    String
+  lastName     String
+  email        String?     @unique
+  jobTypeId    String?
+  jobType      JobType?    @relation(fields: [jobTypeId], references: [id])
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  unitMemberships             UnitMembership[]
+  superuserAssignments        SuperuserAssignment[] @relation("SuperuserUser")
+  grantedSuperuserAssignments SuperuserAssignment[] @relation("SuperuserGrantedBy")
+  scheduleAssignments         ScheduleAssignment[]  @relation("Assignee")
+  approvedScheduleAssignments ScheduleAssignment[]  @relation("AssignmentApprovedBy")
+  timeEntries                 TimeEntry[]           @relation("TimeEntryOwner")
+  approvedTimeEntries         TimeEntry[]           @relation("TimeEntryApprovedBy")
+  credentials                 Credential[]
+  sentMessages                Message[]             @relation("SentMessages")
+  receivedMessages            Message[]             @relation("ReceivedMessages")
+  notifications               Notification[]
+  reportedCallIns             CallIn[]              @relation("ReportedCallIns")
+  handledCallIns              CallIn[]              @relation("HandledCallIns")
+  publishedSchedulePeriods    SchedulePeriod[]      @relation("PublishedBy")
+
+  @@unique([hospitalId, badgeNumber])
+}
+
+model UnitMembership {
+  id              String         @id @default(cuid())
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unitId          String
+  unit            Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  isPrimary       Boolean        @default(false)
+  priorityGroupId String?
+  priorityGroup   PriorityGroup? @relation(fields: [priorityGroupId], references: [id])
+  createdAt       DateTime       @default(now())
+
+  @@unique([userId, unitId])
+}
+
+// Extensible "superuser" grant for extra schedule-balancing permissions.
+// Exact scope is still undefined by the founder — `permissions` is a free-form
+// JSON bag so new capabilities can be added later without a schema migration.
+model SuperuserAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("SuperuserUser", fields: [userId], references: [id], onDelete: Cascade)
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  grantedById String
+  grantedBy   User     @relation("SuperuserGrantedBy", fields: [grantedById], references: [id])
+  permissions Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, unitId])
+}
+
+// ---------------------------------------------------------------------------
+// Scheduling
+// ---------------------------------------------------------------------------
+
+model PriorityGroup {
+  id        String   @id @default(cuid())
+  unitId    String
+  unit      Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name      String
+  rank      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships UnitMembership[]
+
+  @@unique([unitId, rank])
+}
+
+model SchedulePeriod {
+  id            String               @id @default(cuid())
+  unitId        String
+  unit          Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  startDate     DateTime
+  endDate       DateTime
+  status        SchedulePeriodStatus @default(DRAFT)
+  publishedAt   DateTime?
+  publishedById String?
+  publishedBy   User?                @relation("PublishedBy", fields: [publishedById], references: [id])
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  shifts Shift[]
+
+  @@unique([unitId, startDate, endDate])
+}
+
+model Shift {
+  id               String          @id @default(cuid())
+  unitId           String
+  unit             Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  schedulePeriodId String?
+  schedulePeriod   SchedulePeriod? @relation(fields: [schedulePeriodId], references: [id])
+  jobTypeId        String
+  jobType          JobType         @relation(fields: [jobTypeId], references: [id])
+  startTime        DateTime
+  endTime          DateTime
+  requiredCount    Int             @default(1)
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  assignments ScheduleAssignment[]
+  timeEntries TimeEntry[]
+  callIns     CallIn[]
+
+  @@index([unitId, startTime])
+}
+
+model ScheduleAssignment {
+  id           String           @id @default(cuid())
+  shiftId      String
+  shift        Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User             @relation("Assignee", fields: [userId], references: [id], onDelete: Cascade)
+  status       AssignmentStatus @default(SELF_SCHEDULED)
+  signedUpAt   DateTime         @default(now())
+  approvedAt   DateTime?
+  approvedById String?
+  approvedBy   User?            @relation("AssignmentApprovedBy", fields: [approvedById], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([shiftId, userId])
+}
+
+// ---------------------------------------------------------------------------
+// Timekeeping
+// ---------------------------------------------------------------------------
+
+model TimeEntry {
+  id                String                  @id @default(cuid())
+  userId            String
+  user              User                    @relation("TimeEntryOwner", fields: [userId], references: [id], onDelete: Cascade)
+  shiftId           String?
+  shift             Shift?                  @relation(fields: [shiftId], references: [id])
+  type              TimeEntryType
+  source            TimeEntrySource         @default(APP)
+  timestamp         DateTime
+  originalTimestamp DateTime?
+  flaggedByWorker   Boolean                 @default(false)
+  flagReason        String?
+  approvalStatus    TimeEntryApprovalStatus @default(PENDING)
+  approvedById      String?
+  approvedBy        User?                   @relation("TimeEntryApprovedBy", fields: [approvedById], references: [id])
+  approvedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([userId, timestamp])
+}
+
+// ---------------------------------------------------------------------------
+// Credentials
+// ---------------------------------------------------------------------------
+
+model Credential {
+  id                    String         @id @default(cuid())
+  userId                String
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                  CredentialType
+  customName            String?
+  issuingBody           String?
+  credentialNumber      String?
+  issueDate             DateTime?
+  expirationDate        DateTime
+  fileUrl               String?
+  workerReminderSentAt  DateTime?
+  managerReminderSentAt DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([expirationDate])
+}
+
+// ---------------------------------------------------------------------------
+// Messaging & notifications
+// ---------------------------------------------------------------------------
+
+model Message {
+  id          String    @id @default(cuid())
+  senderId    String
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User      @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  body        String
+  sentAt      DateTime  @default(now())
+  readAt      DateTime?
+
+  @@index([recipientId, sentAt])
+}
+
+model Notification {
+  id      String           @id @default(cuid())
+  userId  String
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type    NotificationType
+  title   String
+  body    String?
+  payload Json?
+  sentAt  DateTime         @default(now())
+  readAt  DateTime?
+
+  @@index([userId, sentAt])
+}
+
+// ---------------------------------------------------------------------------
+// Admin oversight
+// ---------------------------------------------------------------------------
+
+model CallIn {
+  id           String       @id @default(cuid())
+  shiftId      String
+  shift        Shift        @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  reportedById String
+  reportedBy   User         @relation("ReportedCallIns", fields: [reportedById], references: [id])
+  reason       String?
+  calledInAt   DateTime     @default(now())
+  status       CallInStatus @default(OPEN)
+  handledById  String?
+  handledBy    User?        @relation("HandledCallIns", fields: [handledById], references: [id])
+  handledAt    DateTime?
+  notes        String?
+}
