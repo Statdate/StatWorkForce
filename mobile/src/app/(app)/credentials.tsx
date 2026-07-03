@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getCredentials, type Credential } from '@/lib/api';
+import * as DocumentPicker from 'expo-document-picker';
+import { getCredentials, uploadCredentialFile, type Credential } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 
 const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
+
+const PICKABLE_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
 
 function credentialStatus(expirationDate: string) {
   const expiresAt = new Date(expirationDate).getTime();
@@ -20,6 +30,8 @@ export default function CredentialsScreen() {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<{ id: string; message: string } | null>(null);
 
   const load = useCallback(async () => {
     const { credentials } = await getCredentials();
@@ -34,6 +46,30 @@ export default function CredentialsScreen() {
     setIsRefreshing(true);
     await load();
     setIsRefreshing(false);
+  }
+
+  async function handleUpload(credentialId: string) {
+    setUploadError(null);
+    const result = await DocumentPicker.getDocumentAsync({ type: PICKABLE_MIME_TYPES });
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+    setUploadingId(credentialId);
+    try {
+      await uploadCredentialFile(credentialId, {
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType ?? 'application/octet-stream',
+      });
+      await load();
+    } catch (error) {
+      setUploadError({
+        id: credentialId,
+        message: error instanceof Error ? error.message : 'Upload failed.',
+      });
+    } finally {
+      setUploadingId(null);
+    }
   }
 
   return (
@@ -53,6 +89,7 @@ export default function CredentialsScreen() {
           }
           renderItem={({ item }) => {
             const status = credentialStatus(item.expirationDate);
+            const isUploading = uploadingId === item.id;
             return (
               <ThemedView type="backgroundElement" style={styles.card}>
                 <ThemedText type="smallBold">
@@ -67,6 +104,32 @@ export default function CredentialsScreen() {
                 <ThemedText type="small" style={{ color: status.color }}>
                   {status.label}
                 </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {item.fileName
+                    ? `Document: ${item.fileName}${
+                        item.fileUploadedAt
+                          ? ` (uploaded ${new Date(item.fileUploadedAt).toLocaleDateString()})`
+                          : ''
+                      }`
+                    : 'No document uploaded yet.'}
+                </ThemedText>
+                <Pressable
+                  onPress={() => handleUpload(item.id)}
+                  disabled={isUploading}
+                  style={styles.uploadButton}>
+                  <ThemedText type="small" style={styles.uploadText}>
+                    {isUploading
+                      ? 'Uploading…'
+                      : item.fileName
+                        ? 'Replace document'
+                        : 'Upload document'}
+                  </ThemedText>
+                </Pressable>
+                {uploadError?.id === item.id && (
+                  <ThemedText type="small" style={styles.errorText}>
+                    {uploadError.message}
+                  </ThemedText>
+                )}
               </ThemedView>
             );
           }}
@@ -82,4 +145,14 @@ const styles = StyleSheet.create({
   list: { padding: Spacing.three, gap: Spacing.two },
   card: { borderRadius: Spacing.two, padding: Spacing.three, gap: 4 },
   empty: { textAlign: 'center', marginTop: Spacing.six },
+  uploadButton: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.one,
+    backgroundColor: '#0f172a',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  uploadText: { color: '#fff', fontWeight: '600' },
+  errorText: { color: '#dc2626' },
 });

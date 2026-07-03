@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/dal";
 import { getMyCredentials } from "@/lib/data/worker";
+import { uploadCredentialFileAction } from "@/app/actions/credentials";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 
@@ -32,20 +33,57 @@ export default async function WorkerCredentialsPage() {
           return (
             <div
               key={credential.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+              className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
             >
-              <div>
-                <p className="font-medium text-slate-900">
-                  {credential.customName ?? credential.type.replaceAll("_", " ")}
-                </p>
-                <p className="text-sm text-slate-500">{credential.issuingBody ?? "Issuing body not set"}</p>
-                <p className="text-xs text-slate-400">
-                  Expires {credential.expirationDate.toLocaleDateString()}
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-900">
+                    {credential.customName ?? credential.type.replaceAll("_", " ")}
+                  </p>
+                  <p className="text-sm text-slate-500">{credential.issuingBody ?? "Issuing body not set"}</p>
+                  <p className="text-xs text-slate-400">
+                    Expires {credential.expirationDate.toLocaleDateString()}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
+                  {status.label}
+                </span>
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>
-                {status.label}
-              </span>
+
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                {credential.fileName ? (
+                  <p className="text-xs text-slate-500">
+                    <a
+                      href={`/api/credentials/${credential.id}/file`}
+                      target="_blank"
+                      className="font-medium text-slate-900 underline underline-offset-2 hover:text-slate-600"
+                    >
+                      View document
+                    </a>{" "}
+                    · {credential.fileName}
+                    {credential.fileUploadedAt &&
+                      ` · uploaded ${credential.fileUploadedAt.toLocaleDateString()}`}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400">No document uploaded yet.</p>
+                )}
+                <form action={uploadCredentialFileAction} className="mt-2 flex items-center gap-2">
+                  <input type="hidden" name="credentialId" value={credential.id} />
+                  <input
+                    type="file"
+                    name="file"
+                    required
+                    accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+                    className="text-xs text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                  >
+                    {credential.fileName ? "Replace" : "Upload"}
+                  </button>
+                </form>
+              </div>
             </div>
           );
         })}
@@ -55,7 +93,7 @@ export default async function WorkerCredentialsPage() {
       </div>
 
       <p className="mt-8 text-xs text-slate-400">
-        Document upload isn&apos;t wired up in this scaffold yet — file storage provider still needs to be chosen.
+        PDF or image (JPEG, PNG, WebP, HEIC), up to 10 MB.
       </p>
     </DashboardShell>
   );

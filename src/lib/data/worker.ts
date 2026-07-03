@@ -120,8 +120,74 @@ export async function getMyCredentials() {
 export async function getCredentialsForUser(userId: string) {
   return prisma.credential.findMany({
     where: { userId },
+    // The document bytes never belong in a list payload — fetch them one at a
+    // time through getCredentialFileForUser() instead.
+    omit: { fileData: true },
     orderBy: { expirationDate: "asc" },
   });
+}
+
+const CREDENTIAL_FILE_MAX_BYTES = 10 * 1024 * 1024;
+const CREDENTIAL_FILE_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+export async function uploadMyCredentialFile(
+  credentialId: string,
+  file: { name: string; mimeType: string; data: Uint8Array<ArrayBuffer> }
+) {
+  const user = await getCurrentUser();
+  return saveCredentialFileForUser(user.id, credentialId, file);
+}
+
+export async function saveCredentialFileForUser(
+  userId: string,
+  credentialId: string,
+  file: { name: string; mimeType: string; data: Uint8Array<ArrayBuffer> }
+) {
+  if (!CREDENTIAL_FILE_MIME_TYPES.has(file.mimeType)) {
+    throw new Error("Unsupported file type — upload a PDF or an image (JPEG, PNG, WebP, HEIC).");
+  }
+  if (file.data.byteLength === 0) {
+    throw new Error("The uploaded file is empty.");
+  }
+  if (file.data.byteLength > CREDENTIAL_FILE_MAX_BYTES) {
+    throw new Error("File is too large — the limit is 10 MB.");
+  }
+
+  // updateMany so the ownership check (userId in the where) and the write are
+  // a single query — a worker can never attach a file to someone else's
+  // credential, even with a guessed id.
+  const result = await prisma.credential.updateMany({
+    where: { id: credentialId, userId },
+    data: {
+      fileName: file.name,
+      fileMimeType: file.mimeType,
+      fileData: file.data,
+      fileUploadedAt: new Date(),
+    },
+  });
+  if (result.count === 0) {
+    throw new Error("Credential not found");
+  }
+}
+
+export async function getCredentialFileForUser(userId: string, credentialId: string) {
+  const credential = await prisma.credential.findFirst({
+    where: { id: credentialId, userId },
+    select: { fileName: true, fileMimeType: true, fileData: true },
+  });
+  if (!credential?.fileData || !credential.fileMimeType) return null;
+  return {
+    fileName: credential.fileName ?? "credential",
+    mimeType: credential.fileMimeType,
+    data: credential.fileData,
+  };
 }
 
 export async function getMyTimeEntries() {

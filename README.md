@@ -150,8 +150,17 @@ a fresh local database:
   unit-sharing manager/worker pairs, with unread counts. Verified sending in
   both directions and the unread badge clearing on open.
 
-Not yet exercised: credential upload (no file storage provider chosen yet)
-and admin call-in handling actions — those remain read-only in this pass.
+- **Credential document upload** — workers attach a PDF/image to each
+  credential (web upload form + mobile document picker, both backed by the
+  same `/api/credentials/[id]/file` route). Verified: uploaded a PNG through
+  the API, downloaded it back byte-identical with correct
+  Content-Type/Disposition headers, wrong file types rejected with a 400,
+  unauthenticated requests get 401, and another worker's token gets 404
+  (ownership is enforced by filtering on the session's userId, never a
+  client-supplied one).
+
+Not yet exercised: admin call-in handling actions — those remain read-only
+in this pass.
 
 ## Project structure
 
@@ -230,9 +239,15 @@ src/app/login/              Badge number + password login
    deployment serving multiple hospital customers), the login flow needs a
    way to disambiguate the hospital (subdomain, hospital code field, etc.)
    before this is production-safe.
-5. **File storage for credential uploads.** `Credential.fileUrl` is a plain
-   string field — no upload flow or storage provider (S3, Render disks,
-   Cloudinary, etc.) is wired up yet.
+5. **File storage for credential uploads — decided (revisit at scale).**
+   Documents are stored inline in Postgres (`Credential.fileData BYTEA`,
+   capped at 10 MB, PDF/JPEG/PNG/WebP/HEIC only). Chosen because Render's
+   web-service disk is ephemeral (filesystem storage would vanish on every
+   deploy) and an object store would add external credentials to the deploy
+   for what are small, per-worker files. If upload volume grows, swap to
+   S3/R2 by replacing only `saveCredentialFileForUser` /
+   `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
+   touches the bytes.
 6. **Credential/schedule-publish notification delivery.** `Notification` rows
    are modeled, but there's no push/SMS/email delivery mechanism connected —
    worth deciding before the "2 months / 1 month before expiration" and
@@ -376,16 +391,16 @@ means the device itself, not your dev machine.
   (Reanimated, gesture-handler, `expo-calendar`, etc.) compiled, 0 errors,
   and the app installed onto a booted iPhone 17 Pro Simulator (confirmed on
   disk — `com.anonymous.statworkforce` in the simulator's app container).
-- **Not yet confirmed: actually driving the running app.** Both
-  computer-use (blocked — "can't be approved during a scheduled run") and
-  `xcrun simctl launch`/`listapps` (hung indefinitely, while `simctl list
-  devices` worked fine) failed in the environment this was built in,
-  consistent with no interactive GUI session being attached there. So the
-  literal "tap Sync to Calendar, check the Calendar app for the event and
-  alarm" step has not been done yet, even though the build and install are
-  confirmed working. Backend + Metro bundler were left running for a quick
-  pickup: open Simulator.app, find "Stat Workforce," log in with badge
-  `30001` (`Password123!`), tap **Sync to Calendar**, check Calendar.
+- **Confirmed by hand-testing on the iOS Simulator** (Anthony, driving the
+  Simulator directly — automation from the build environment wasn't possible:
+  computer-use was blocked and `xcrun simctl launch` hung): login with badge
+  `30001`, **Sync to Calendar** creating the event with the pre-shift alarm
+  in the iOS Calendar app, and the calendar picker choosing a specific
+  destination calendar. Two real bugs were found this way and fixed:
+  requesting write-only calendar permission while also calling
+  `getCalendars()` (write-only explicitly can't list calendars — switched
+  the app to full access), and the picker's `FlatList` collapsing to zero
+  height inside the modal (no bounded height anywhere in its parent chain).
 - Verified via `npx expo start --web` against a freshly migrated and
   seeded database: logged in as a seeded worker; cancelled a self-scheduled
   shift and watched it move to Open Shifts with the signup count updating;
@@ -403,9 +418,13 @@ means the device itself, not your dev machine.
   `/api/schedule` reflects it), the "Published" badge and calendar-sync UI
   render correctly in the Expo web preview (correctly showing "Calendar
   sync requires the native app" instead of a crash, since `expo-calendar`
-  is guarded behind a `Platform.OS !== 'web'` check), the alarm-offset
-  input persists across reloads, and `tsc --noEmit` passes for
-  `src/lib/calendar.ts` against the documented SDK 57 API, and the native
-  build compiles the module cleanly. The one thing not yet confirmed is the
-  actual `calendar.createEvent(...)` write and alarm landing in a real
-  calendar app — see the pickup steps above.
+  is guarded behind a `Platform.OS !== 'web'` check), and the actual
+  `createEvent` write + alarm was confirmed by hand in the Simulator's
+  Calendar app (see above).
+- **Credential document upload on mobile**: the backend route and web flow
+  are fully verified (byte-identical round-trip, type/size/ownership
+  rejection paths — see "Verified so far" above), the mobile screen
+  typechecks, and the native build with `expo-document-picker` compiled and
+  installed cleanly. Not yet hand-tested on the Simulator: tapping **Upload
+  document**, picking a file from the Files app, and seeing the card flip to
+  "Document: <name>". That's the next thing to poke at in the Simulator.

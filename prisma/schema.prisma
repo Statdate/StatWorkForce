@@ -320,7 +320,15 @@ model Credential {
   credentialNumber      String?
   issueDate             DateTime?
   expirationDate        DateTime
-  fileUrl               String?
+  // Uploaded document (license scan, certification card). Stored inline in
+  // Postgres rather than an object store: Render's service disk is ephemeral,
+  // credential docs are small (capped in the data layer), and this keeps the
+  // deploy free of external storage credentials. Swapping to S3 later only
+  // touches the data-layer save/load functions.
+  fileName              String?
+  fileMimeType          String?
+  fileData              Bytes?
+  fileUploadedAt        DateTime?
   workerReminderSentAt  DateTime?
   managerReminderSentAt DateTime?
   createdAt             DateTime       @default(now())

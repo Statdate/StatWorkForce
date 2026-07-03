@@ -80,10 +80,40 @@ export type Credential = {
   customName: string | null;
   issuingBody: string | null;
   expirationDate: string;
+  fileName: string | null;
+  fileUploadedAt: string | null;
 };
 
 export function getCredentials() {
   return request<{ credentials: Credential[] }>("/api/credentials");
+}
+
+/** Separate from request(): multipart needs fetch to set the Content-Type
+ * boundary itself, so the JSON header the shared helper adds must not apply.
+ * React Native's FormData takes a `{ uri, name, type }` descriptor instead of
+ * a web File/Blob. */
+export async function uploadCredentialFile(
+  credentialId: string,
+  file: { uri: string; name: string; mimeType: string }
+) {
+  const token = await getItem(TOKEN_KEY);
+  const form = new FormData();
+  form.append("file", {
+    uri: file.uri,
+    name: file.name,
+    type: file.mimeType,
+  } as unknown as Blob);
+
+  const response = await fetch(`${API_URL}/api/credentials/${credentialId}/file`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(body?.error ?? "Upload failed", response.status);
+  }
+  return body as { ok: true };
 }
 
 export type OpenShift = {
