@@ -4,6 +4,7 @@ const TABS = [
   { href: "/worker", label: "My schedule" },
   { href: "/worker/credentials", label: "My credentials" },
   { href: "/worker/messages", label: "Messages" },
+  { href: "/worker/notifications", label: "Notifications" },
 ] as const;
 
 export function WorkerNav({ active }: { active: (typeof TABS)[number]["href"] }) {

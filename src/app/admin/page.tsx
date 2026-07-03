@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getOrgOverview } from "@/lib/data/admin";
 import { getCurrentUser } from "@/lib/dal";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -8,8 +9,20 @@ export default async function AdminPage() {
     getOrgOverview(),
   ]);
 
+  const nav = (
+    <div className="flex flex-wrap gap-2">
+      <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Overview</span>
+      <Link
+        href="/admin/credentials"
+        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
+      >
+        Credentials
+      </Link>
+    </div>
+  );
+
   return (
-    <DashboardShell roleLabel="Admin" userName={`${user.firstName} ${user.lastName}`}>
+    <DashboardShell roleLabel="Admin" userName={`${user.firstName} ${user.lastName}`} nav={nav}>
       <h1 className="text-2xl font-semibold text-slate-900">{hospital.name}</h1>
       <p className="mt-1 text-sm text-slate-500">Org-wide overview across all units.</p>
 

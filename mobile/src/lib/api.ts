@@ -144,6 +144,23 @@ export function dropShift(shiftId: string) {
   });
 }
 
+export type AppNotification = {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  sentAt: string;
+  readAt: string | null;
+};
+
+/** markRead marks everything read server-side after fetching; the returned
+ * list still carries pre-read state so unread rows can be highlighted once. */
+export function getNotifications(markRead = false) {
+  return request<{ notifications: AppNotification[] }>(
+    `/api/notifications${markRead ? "?markRead=1" : ""}`
+  );
+}
+
 export type MessageThread = {
   id: string;
   firstName: string;

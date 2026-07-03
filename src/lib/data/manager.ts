@@ -146,3 +146,32 @@ export async function getUnitStaff(unitId: string) {
     orderBy: { user: { lastName: "asc" } },
   });
 }
+
+/** Compiled credential list for every worker in the unit, soonest expiration
+ * first — the manager's "what needs attention" view. Workers with nothing on
+ * file are listed separately so gaps are visible, not silent. */
+export async function getUnitCredentials(unitId: string) {
+  await assertUnitInScope(unitId);
+
+  const [credentials, workersWithoutCredentials] = await Promise.all([
+    prisma.credential.findMany({
+      where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId } } } },
+      omit: { fileData: true },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+      },
+      orderBy: { expirationDate: "asc" },
+    }),
+    prisma.user.findMany({
+      where: {
+        accountType: "WORKER",
+        unitMemberships: { some: { unitId } },
+        credentials: { none: {} },
+      },
+      select: { id: true, firstName: true, lastName: true, badgeNumber: true },
+      orderBy: { lastName: "asc" },
+    }),
+  ]);
+
+  return { credentials, workersWithoutCredentials };
+}

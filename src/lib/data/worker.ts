@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, scopedUnitIds, type CurrentUser } from "@/lib/dal";
+import { CredentialType } from "@/generated/prisma/enums";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -137,6 +138,80 @@ const CREDENTIAL_FILE_MIME_TYPES = new Set([
   "image/heif",
 ]);
 
+type CredentialFileInput = { name: string; mimeType: string; data: Uint8Array<ArrayBuffer> };
+
+function validateCredentialFile(file: CredentialFileInput) {
+  if (!CREDENTIAL_FILE_MIME_TYPES.has(file.mimeType)) {
+    throw new Error("Unsupported file type — upload a PDF or an image (JPEG, PNG, WebP, HEIC).");
+  }
+  if (file.data.byteLength === 0) {
+    throw new Error("The uploaded file is empty.");
+  }
+  if (file.data.byteLength > CREDENTIAL_FILE_MAX_BYTES) {
+    throw new Error("File is too large — the limit is 10 MB.");
+  }
+}
+
+export type NewCredentialInput = {
+  type: string;
+  customName?: string | null;
+  issuingBody?: string | null;
+  credentialNumber?: string | null;
+  expirationDate: string;
+  file?: CredentialFileInput | null;
+};
+
+export async function addMyCredential(input: NewCredentialInput) {
+  const user = await getCurrentUser();
+  return addCredentialForUser(user.id, input);
+}
+
+export async function addCredentialForUser(userId: string, input: NewCredentialInput) {
+  if (!Object.hasOwn(CredentialType, input.type)) {
+    throw new Error("Pick a credential type from the list.");
+  }
+  const type = input.type as CredentialType;
+
+  const customName = input.customName?.trim() || null;
+  if (type === "OTHER" && !customName) {
+    throw new Error("Name the certification when choosing Specialty certification / Other.");
+  }
+
+  // A bare YYYY-MM-DD (what <input type="date"> submits) parses as UTC
+  // midnight, which displays as the previous day in US timezones. Anchor
+  // date-only values to local midnight instead so the date shown matches the
+  // date typed.
+  const raw = input.expirationDate;
+  const expirationDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T00:00:00`)
+    : new Date(raw);
+  if (Number.isNaN(expirationDate.getTime())) {
+    throw new Error("Enter a valid expiration date.");
+  }
+
+  if (input.file) validateCredentialFile(input.file);
+
+  return prisma.credential.create({
+    data: {
+      userId,
+      type,
+      customName,
+      issuingBody: input.issuingBody?.trim() || null,
+      credentialNumber: input.credentialNumber?.trim() || null,
+      expirationDate,
+      ...(input.file
+        ? {
+            fileName: input.file.name,
+            fileMimeType: input.file.mimeType,
+            fileData: input.file.data,
+            fileUploadedAt: new Date(),
+          }
+        : {}),
+    },
+    omit: { fileData: true },
+  });
+}
+
 export async function uploadMyCredentialFile(
   credentialId: string,
   file: { name: string; mimeType: string; data: Uint8Array<ArrayBuffer> }
@@ -148,17 +223,9 @@ export async function uploadMyCredentialFile(
 export async function saveCredentialFileForUser(
   userId: string,
   credentialId: string,
-  file: { name: string; mimeType: string; data: Uint8Array<ArrayBuffer> }
+  file: CredentialFileInput
 ) {
-  if (!CREDENTIAL_FILE_MIME_TYPES.has(file.mimeType)) {
-    throw new Error("Unsupported file type — upload a PDF or an image (JPEG, PNG, WebP, HEIC).");
-  }
-  if (file.data.byteLength === 0) {
-    throw new Error("The uploaded file is empty.");
-  }
-  if (file.data.byteLength > CREDENTIAL_FILE_MAX_BYTES) {
-    throw new Error("File is too large — the limit is 10 MB.");
-  }
+  validateCredentialFile(file);
 
   // updateMany so the ownership check (userId in the where) and the write are
   // a single query — a worker can never attach a file to someone else's
@@ -183,6 +250,40 @@ export async function getCredentialFileForUser(userId: string, credentialId: str
     select: { fileName: true, fileMimeType: true, fileData: true },
   });
   if (!credential?.fileData || !credential.fileMimeType) return null;
+  return {
+    fileName: credential.fileName ?? "credential",
+    mimeType: credential.fileMimeType,
+    data: credential.fileData,
+  };
+}
+
+/** Role-aware document access: the owner always; admins for any worker in
+ * their hospital; managers for workers who share one of their units. */
+export async function getCredentialFileForViewer(viewer: CurrentUser, credentialId: string) {
+  const credential = await prisma.credential.findUnique({
+    where: { id: credentialId },
+    select: {
+      fileName: true,
+      fileMimeType: true,
+      fileData: true,
+      user: {
+        select: { id: true, hospitalId: true, unitMemberships: { select: { unitId: true } } },
+      },
+    },
+  });
+  if (!credential?.fileData || !credential.fileMimeType) return null;
+
+  const owner = credential.user;
+  const isOwner = owner.id === viewer.id;
+  const isAdmin = viewer.accountType === "ADMIN" && owner.hospitalId === viewer.hospitalId;
+  const viewerUnits = scopedUnitIds(viewer);
+  const isManagerOfWorker =
+    viewer.accountType === "MANAGER" &&
+    viewerUnits !== null &&
+    owner.unitMemberships.some((m) => viewerUnits.includes(m.unitId));
+
+  if (!isOwner && !isAdmin && !isManagerOfWorker) return null;
+
   return {
     fileName: credential.fileName ?? "credential",
     mimeType: credential.fileMimeType,

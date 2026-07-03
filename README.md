@@ -159,6 +159,20 @@ a fresh local database:
   (ownership is enforced by filtering on the session's userId, never a
   client-supplied one).
 
+- **Credential management + expiry notifications** — workers add credentials
+  through a type dropdown (RN/LPN license, ACLS, BLS, PALS, NIHSS, CCRN, CMC,
+  advanced degree, specialty/other with a custom name) with an optional
+  document in the same submit. Managers get a per-unit compiled list
+  (soonest-expiring first, with status badges, document links, workers with
+  nothing on file, and a Print button backed by print CSS); admins get the
+  same hospital-wide with a unit column. Verified in the browser as all three
+  roles: added a PALS credential via the dropdown, watched the expiry sweep
+  auto-generate worker + manager notifications for it (and for the seeded
+  expired BLS / expiring ACLS), confirmed the manager alerts panel and worker
+  Notifications tab render them, confirmed managers/admins can open worker
+  documents, and confirmed the sweep is idempotent (4 rows stayed 4 after
+  repeated runs).
+
 Not yet exercised: admin call-in handling actions — those remain read-only
 in this pass.
 
@@ -248,10 +262,17 @@ src/app/login/              Badge number + password login
    S3/R2 by replacing only `saveCredentialFileForUser` /
    `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
    touches the bytes.
-6. **Credential/schedule-publish notification delivery.** `Notification` rows
-   are modeled, but there's no push/SMS/email delivery mechanism connected —
-   worth deciding before the "2 months / 1 month before expiration" and
-   "schedule published" reminders can actually reach anyone.
+6. **Notification delivery — in-app done, push/SMS/email still open.**
+   Credential-expiry reminders now exist as in-app notifications: an
+   idempotent sweep (`ensureCredentialExpiryNotifications`) fires 2 months
+   before expiration, notifying the worker and every manager of their
+   unit(s), guarded by `workerReminderSentAt`/`managerReminderSentAt` so
+   re-runs never duplicate. Two production-hardening gaps remain: (a) the
+   sweep runs when notification surfaces load (worker/manager credential
+   pages, `/api/notifications`) because there's no job runner — a daily cron
+   should replace that; (b) nothing pushes to a locked phone — APNs/FCM (via
+   Expo push), SMS, or email delivery still needs choosing before reminders
+   reach someone who never opens the app.
 
 ## Deploying to Render
 

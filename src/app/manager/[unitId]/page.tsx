@@ -53,6 +53,12 @@ export default async function ManagerUnitPage({
           </Link>
         ))}
       <Link
+        href={`/manager/${unitId}/credentials`}
+        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
+      >
+        Credentials
+      </Link>
+      <Link
         href={`/manager/${unitId}/messages`}
         className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
       >

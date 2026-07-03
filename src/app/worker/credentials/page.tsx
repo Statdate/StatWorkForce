@@ -1,6 +1,7 @@
 import { getCurrentUser } from "@/lib/dal";
 import { getMyCredentials } from "@/lib/data/worker";
-import { uploadCredentialFileAction } from "@/app/actions/credentials";
+import { addCredentialAction, uploadCredentialFileAction } from "@/app/actions/credentials";
+import { CREDENTIAL_TYPE_OPTIONS, credentialDisplayName } from "@/lib/credential-types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 
@@ -37,9 +38,7 @@ export default async function WorkerCredentialsPage() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-slate-900">
-                    {credential.customName ?? credential.type.replaceAll("_", " ")}
-                  </p>
+                  <p className="font-medium text-slate-900">{credentialDisplayName(credential)}</p>
                   <p className="text-sm text-slate-500">{credential.issuingBody ?? "Issuing body not set"}</p>
                   <p className="text-xs text-slate-400">
                     Expires {credential.expirationDate.toLocaleDateString()}
@@ -90,6 +89,87 @@ export default async function WorkerCredentialsPage() {
         {credentials.length === 0 && (
           <p className="text-sm text-slate-500">No credentials on file yet.</p>
         )}
+      </div>
+
+      <div className="mt-8 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="font-medium text-slate-900">Add a credential</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Pick what you&apos;re uploading, set its expiration date, and attach the document.
+        </p>
+        <form action={addCredentialAction} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="text-slate-700">Credential type</span>
+            <select
+              name="type"
+              required
+              defaultValue=""
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>
+                Choose a type…
+              </option>
+              {CREDENTIAL_TYPE_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">
+              Name <span className="text-slate-400">(required for Specialty/Other)</span>
+            </span>
+            <input
+              type="text"
+              name="customName"
+              placeholder="e.g. Trauma Nurse Core Course"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Issuing body</span>
+            <input
+              type="text"
+              name="issuingBody"
+              placeholder="e.g. American Heart Association"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Credential / license number</span>
+            <input
+              type="text"
+              name="credentialNumber"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Expiration date</span>
+            <input
+              type="date"
+              name="expirationDate"
+              required
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-slate-700">Document (optional)</span>
+            <input
+              type="file"
+              name="file"
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+              className="mt-1 w-full text-xs text-slate-500 file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2.5 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+            />
+          </label>
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Add credential
+            </button>
+          </div>
+        </form>
       </div>
 
       <p className="mt-8 text-xs text-slate-400">

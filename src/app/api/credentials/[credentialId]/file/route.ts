@@ -1,10 +1,12 @@
 import { getApiUser } from "@/lib/dal";
-import { getCredentialFileForUser, saveCredentialFileForUser } from "@/lib/data/worker";
+import { getCredentialFileForViewer, saveCredentialFileForUser } from "@/lib/data/worker";
 import { corsJson, corsOptionsResponse, CORS_HEADERS } from "@/lib/cors";
 
 /** Serves the uploaded credential document. getApiUser() accepts either the
  * web session cookie or a mobile Bearer token, so the same URL backs the
- * web "View document" link and an authenticated mobile fetch. */
+ * web "View document" link and an authenticated mobile fetch. Access: the
+ * owner, admins (same hospital), and managers of the worker's unit(s) —
+ * managers/admins need to open documents from their credential views. */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ credentialId: string }> }
@@ -15,7 +17,7 @@ export async function GET(
   }
 
   const { credentialId } = await params;
-  const file = await getCredentialFileForUser(user.id, credentialId);
+  const file = await getCredentialFileForViewer(user, credentialId);
   if (!file) {
     return corsJson({ error: "No document on file" }, { status: 404 });
   }
