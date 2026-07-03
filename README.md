@@ -240,28 +240,96 @@ src/app/login/              Badge number + password login
 
 ## Deploying to Render
 
-`render.yaml` describes a web service + managed Postgres database. It has
-**not** been applied — no Render service was created, since that requires
-Anthony's Render login. To deploy:
+Live at **https://statworkforce.onrender.com** (Blueprint-deployed from
+`render.yaml`: a free-tier web service + free-tier managed Postgres,
+GitHub-connected for auto-deploy on every push to `main`; `render.yaml`'s
+`buildCommand` runs `prisma migrate deploy` automatically as part of each
+build, so schema changes ship without a manual step).
 
-1. Push this repo to GitHub (see below).
-2. In Render, "New +" → "Blueprint" → point at the GitHub repo. Render will
-   read `render.yaml` and provision the web service + Postgres.
-3. Set `SESSION_SECRET` in the Render dashboard (marked `sync: false` in
-   `render.yaml` so it isn't committed).
-4. Render will run `npm install && npm run build` then `npm start`. Run
-   `npm run db:migrate` once (via a Render shell or a one-off job) against
-   the managed database before the first deploy is useful.
+Two real deploy issues were hit and fixed along the way:
+
+1. Declaring `NODE_ENV=production` as a Render env var applies it during the
+   *build* phase too, which makes `npm install` skip devDependencies
+   (`tailwindcss`, `@tailwindcss/postcss`, `typescript`) that `next build`
+   needs. Removed it — Render already sets `NODE_ENV=production` for the
+   running service on its own.
+2. Render's external Postgres connections need `sslmode=require` in the
+   connection string, or you get a misleading "access denied" error instead
+   of a clear SSL error.
+
+The free Postgres instance **expires 2026-08-02** unless upgraded to a paid
+instance type — worth a calendar reminder before then.
 
 ## GitHub
 
-The GitHub CLI (`gh`) is **not installed** in the environment this scaffold
-was built in, so no repository was created or pushed automatically. The repo
-is committed locally and ready — Anthony needs to create a GitHub repo and
-push it himself (or install `gh` and re-run) before Render's auto-deploy-on-push
-can be wired up:
+Repo: **https://github.com/Statdate/StatWorkForce**. Pushed via SSH using a
+key already present in `~/.ssh` (`statdate_github`); this repo's
+`core.sshCommand` git config is set to use that key specifically, since it
+isn't the account's default identity.
+
+## Mobile app (Expo / React Native)
+
+`mobile/` is a separate Expo Router (SDK 57) app in the same repo (not a git
+submodule, not an npm workspace — just a sibling project sharing the parent
+`.git`). It talks to the same backend as the web app via a small token-based
+API layer rather than the cookie-based web session:
+
+- `POST /api/auth/token` — badge number + password in, `{ token, user }` out.
+  Same signed-JWT format as the web session (`src/lib/session.ts`), just
+  handed back in a JSON body instead of an httpOnly cookie, since a mobile
+  client stores it itself.
+- `GET /api/me`, `GET /api/schedule`, `GET /api/credentials` — Bearer-token
+  authenticated, read-only for v1. `src/lib/dal.ts`'s `getApiUser()` is the
+  non-redirecting counterpart to `getCurrentUser()`: a 302 to `/login` makes
+  no sense as a JSON response, so these return a plain 401 instead.
+- `src/proxy.ts` now excludes `/api/*` from its redirect gate entirely — API
+  routes verify their own auth via `getApiUser()`, matching the Next.js
+  data-security guidance that Proxy coverage shouldn't be the only check.
+
+Mobile app structure (`mobile/src/`):
+
+```
+lib/storage.ts         SecureStore on native, localStorage on web
+lib/api.ts              fetch wrapper, attaches Authorization: Bearer <token>
+lib/auth-context.tsx    AuthProvider/useAuth — signIn/signOut/user/isLoading
+app/_layout.tsx         Stack.Protected guard on auth state (Expo Router's
+                        current recommended auth pattern)
+app/sign-in.tsx         badge number + password
+app/(app)/_layout.tsx   Tabs — My Schedule, My Credentials
+```
+
+Scope for this pass, matching what the original spec described for mobile
+("view schedule... sync to phone calendar... credential status"): **read-only**
+— view schedule, view credentials. Self-scheduling, messaging, and the
+calendar-sync/pre-shift-alarm features from the spec aren't in the mobile
+app yet.
+
+### Running the mobile app
 
 ```bash
-git remote add origin <your-github-repo-url>
-git push -u origin main
+cd mobile
+npm install
+npm run ios   # or: npm run web
 ```
+
+`mobile/.env` defaults `EXPO_PUBLIC_API_URL` to `http://localhost:3000`,
+which works for the iOS Simulator (shares the Mac's network namespace) with
+the Next.js dev server running alongside. For a physical device or Android
+emulator, point it at your machine's LAN IP instead — `localhost` on-device
+means the device itself, not your dev machine.
+
+### Verified so far / known gaps
+
+- **Expo Go doesn't support SDK 57 yet** (too new) — `npx expo run:ios` (a
+  real native build) is the correct path, but that needs **CocoaPods**,
+  which isn't installed in the sandbox this was built in. Not something I
+  worked around — `gem install cocoapods` (or Homebrew) would unblock it.
+- Verified instead via `npx expo start --web`: logged in as a seeded worker,
+  confirmed the schedule and credentials screens render real data from the
+  live API routes, and sign-out correctly returns to the sign-in screen
+  (`Stack.Protected` guard reacting to auth state). This exercises the same
+  React components and API calls a native build would — just not the actual
+  native container.
+- Before relying on this for real device testing, install CocoaPods and run
+  `npx expo run:ios` (or `run:android`) at least once to confirm the native
+  build itself works — Expo web can't catch native-module-specific issues.

@@ -20,7 +20,10 @@ const PUBLIC_PATHS = ["/login", "/unauthorized"];
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // API routes (used by the mobile app via Bearer tokens, not the session
+  // cookie) do their own auth check per the Next.js data-security guidance —
+  // a redirect response makes no sense for a JSON API anyway.
+  if (pathname.startsWith("/api") || PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
   }
 

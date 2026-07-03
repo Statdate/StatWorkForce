@@ -6,9 +6,15 @@ import { getCurrentUser, scopedUnitIds } from "@/lib/dal";
  * always filtering on the verified session's userId, never a client-supplied id. */
 export async function getMySchedule() {
   const user = await getCurrentUser();
+  return getScheduleForUser(user.id);
+}
 
+/** Split out from getMySchedule() so API routes (mobile) can supply an
+ * already-resolved userId from getApiUser() instead of the redirect-on-miss
+ * getCurrentUser(), which doesn't make sense for a JSON API response. */
+export async function getScheduleForUser(userId: string) {
   return prisma.scheduleAssignment.findMany({
-    where: { userId: user.id, status: { not: "DROPPED" } },
+    where: { userId, status: { not: "DROPPED" } },
     include: {
       shift: { include: { unit: true, jobType: true } },
     },
@@ -85,9 +91,13 @@ export async function dropShift(shiftId: string) {
 
 export async function getMyCredentials() {
   const user = await getCurrentUser();
+  return getCredentialsForUser(user.id);
+}
 
+/** See getScheduleForUser() — same split, for the mobile API route. */
+export async function getCredentialsForUser(userId: string) {
   return prisma.credential.findMany({
-    where: { userId: user.id },
+    where: { userId },
     orderBy: { expirationDate: "asc" },
   });
 }

@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+# mobile/.env only holds a non-secret default EXPO_PUBLIC_ API URL — safe
+# and useful to commit so the app has a working default out of the box.
+!mobile/.env
 
 # vercel
 .vercel
