@@ -8,7 +8,6 @@
     "scheme": "statworkforce",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.anonymous.statworkforce"
     },
     "android": {
