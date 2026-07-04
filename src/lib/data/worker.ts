@@ -318,6 +318,11 @@ export async function requestTimeOffForUser(userId: string, input: NewTimeOffReq
     throw new Error("Pick how many hours you're requesting.");
   }
 
+  const reason = input.reason?.trim() || null;
+  if (input.type === "OTHER" && !reason) {
+    throw new Error("Add a comment describing the reason when choosing Other.");
+  }
+
   return prisma.timeOffRequest.create({
     data: {
       userId,
@@ -325,7 +330,7 @@ export async function requestTimeOffForUser(userId: string, input: NewTimeOffReq
       startDate,
       endDate,
       hours,
-      reason: input.reason?.trim() || null,
+      reason,
     },
   });
 }

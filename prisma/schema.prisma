@@ -24,6 +24,7 @@ enum AccountType {
 enum UnitType {
   ICU
   PACU
+  PRE_OP
   MED_SURG
   ED
   LABOR_DELIVERY
@@ -51,6 +52,7 @@ enum TimeOffType {
   SICK
   VACATION
   LIFE_BALANCE
+  OTHER
 }
 
 enum TimeOffRequestStatus {
@@ -164,6 +166,15 @@ model User {
   email        String?     @unique
   jobTypeId    String?
   jobType      JobType?    @relation(fields: [jobTypeId], references: [id])
+  // Org title shown alongside jobType — e.g. "ADA" / "Assistant ADA" for unit
+  // leadership, distinct from jobType (which is the clinical role like RN)
+  // and accountType (which drives permissions). Purely a display label.
+  title        String?
+  // Free-text description of the worker's typically-assigned shift pattern,
+  // e.g. "7:00 AM - 3:30 PM (8 Hr)" — shown on their Settings profile. Not
+  // tied to actual Shift records since it's the general pattern they're
+  // hired/scheduled for, not any one specific day.
+  shiftPattern String?
   isActive     Boolean     @default(true)
   // Expo push token for the mobile app (one per user — a new login overwrites
   // it, so the most recently signed-in device gets the alert). Null on web-

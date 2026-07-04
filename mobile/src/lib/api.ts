@@ -221,7 +221,7 @@ export function registerPushToken(token: string) {
   });
 }
 
-export type TimeOffRequestType = "SICK" | "VACATION" | "LIFE_BALANCE";
+export type TimeOffRequestType = "SICK" | "VACATION" | "LIFE_BALANCE" | "OTHER";
 export type TimeOffRequestStatus = "PENDING" | "APPROVED" | "DENIED";
 
 export type TimeOffRequest = {

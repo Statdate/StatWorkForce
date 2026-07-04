@@ -55,7 +55,8 @@
           "icon": "./assets/images/icon.png",
           "color": "#0f172a"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

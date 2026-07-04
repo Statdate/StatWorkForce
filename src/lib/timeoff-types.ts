@@ -8,12 +8,20 @@ export const TIME_OFF_TYPE_LABELS: Record<TimeOffType, string> = {
   SICK: "Sick",
   VACATION: "Vacation",
   LIFE_BALANCE: "Life Balance",
+  OTHER: "Other",
 };
 
 export const TIME_OFF_TYPE_OPTIONS = Object.entries(TIME_OFF_TYPE_LABELS) as [
   TimeOffType,
   string,
 ][];
+
+// A comment/reason is always optional for the named types, but required when
+// the worker picks "Other" — otherwise a manager reviewing the queue has no
+// idea what they're approving.
+export function reasonRequiredFor(type: TimeOffType) {
+  return type === "OTHER";
+}
 
 export function timeOffStatusStyle(status: TimeOffRequestStatus) {
   if (status === "APPROVED") return { label: "Approved", className: "bg-emerald-100 text-emerald-700" };
