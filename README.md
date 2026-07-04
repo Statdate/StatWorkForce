@@ -576,3 +576,72 @@ means the device itself, not your dev machine.
   My Schedule tab; now it's under a dedicated Settings tab alongside the
   biometric-lock toggle, and is still restricted to worker accounts (not
   shown for manager/admin, since sync targets an individual's own shifts).
+
+## Optimization pass: performance, security, error handling, accessibility
+
+A follow-up pass auditing the whole app for query performance, security
+gaps, error-handling gaps, and mobile accessibility, then fixing what was
+concretely load-bearing (skipping speculative changes that didn't hold up
+against how the app actually queries data or routes pages).
+
+- **Database indexes.** Added `UnitMembership.unitId`,
+  `ScheduleAssignment.userId`, and `Credential(userId, expirationDate)` —
+  each covers a where-clause used by a real query (`getUnitStaff()`,
+  `getMessageThreads()`, `getScheduleForUser()`, `getCredentialsForUser()`)
+  that wasn't served by an existing unique/composite index (Postgres won't
+  use a composite index for a filter on anything but its leftmost column).
+- **N+1 fix.** The credential-expiry notification sweep
+  (`src/lib/data/notifications.ts`) queried for a credential's unit
+  managers inside its per-credential loop — one query per expiring
+  credential. Now batches a single manager lookup across every unit
+  touched by any due credential before the loop.
+- **Login brute-force lockout.** 5 failed attempts against one badge
+  number locks it out for 15 minutes (in-memory, per-process — fine for
+  this single-instance Render deploy, documented as a limitation if ever
+  scaled to multiple instances). Also closes a timing side-channel: a
+  nonexistent badge now runs the same bcrypt compare (against a fixed
+  dummy hash) as a wrong password, instead of returning early. Verified
+  via curl: 5 wrong attempts on one badge → 429, a different badge's
+  correct login still succeeds unaffected, the locked badge's *correct*
+  password is still rejected while locked.
+- **Error boundaries.** Added an app-wide `src/app/error.tsx` and a
+  styled `src/app/not-found.tsx` so an unhandled Server Component error
+  or a `notFound()` call renders on-brand instead of Next's generic
+  default pages.
+- **Server Action error surfacing.** Every mutating Server Action now
+  wraps its call in try/catch and redirects back to the same page with
+  the error message in a query param (`redirectWithError()` in
+  `src/lib/action-error.ts`) instead of letting a thrown validation error
+  become an unhandled exception — keeps the rest of the page's state
+  intact and shows the actual reason (bad file type, closed request
+  window, request already reviewed, etc.). Verified in the browser:
+  submitting a "Custom / Other" credential with no name shows "Name the
+  certification when choosing Specialty certification / Other." right on
+  the credentials page, with the rest of the page (existing credentials,
+  the form) untouched.
+- **Mobile error states.** The schedule, credentials, notifications, and
+  time off screens had no error handling around their initial data
+  fetch — a failed request just left the screen looking like an empty
+  state. Each now shows what went wrong with a Retry action. Verified via
+  `expo start --web`: patched `fetch` to fail the credentials request,
+  confirmed the error + Retry banner rendered, restored `fetch`, confirmed
+  Retry recovered correctly.
+- **Mobile accessibility.** Added `accessibilityLabel`/`accessibilityRole`/
+  `accessibilityState` to form inputs, chip selectors (as radio buttons),
+  and action buttons across sign-in, time off, credentials, and the
+  schedule screen — React Native doesn't programmatically associate a
+  label `Text` with a sibling `TextInput` the way an HTML `<label
+  for>` does, so screen reader users had no way to tell what an input was
+  for. Verified via `expo start --web` that `accessibilityLabel` compiles
+  to a real `aria-label` in the DOM.
+- **Reviewed and passed on:** moving `pg` out of the unused-dependency
+  category turned out to be "move to devDependencies," not "remove" — the
+  app only imports `@prisma/adapter-pg` (which depends on `pg` itself),
+  but `pg` is genuinely used by this project's local migration-workaround
+  scripts. Also reviewed the audit's `revalidatePath`-granularity and
+  route-level-caching suggestions — both didn't hold up against how this
+  app actually routes (each dashboard section is already its own route,
+  so existing `revalidatePath` calls are already maximally specific) and
+  authenticates (every page reads the session cookie, which forces
+  dynamic rendering regardless of a `revalidate` export) — so no change
+  was made there rather than adding speculative complexity.
