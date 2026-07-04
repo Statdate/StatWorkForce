@@ -262,24 +262,24 @@ src/app/login/              Badge number + password login
    S3/R2 by replacing only `saveCredentialFileForUser` /
    `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
    touches the bytes.
-6. **Notification delivery — in-app + push done, one setup step remains.**
-   Credential-expiry reminders exist as in-app notifications (idempotent
-   sweep, 2 months before expiration, worker + unit managers) *and* as real
-   push notifications via Expo's push API (`src/lib/push.ts`), sent
-   alongside every notification the sweep creates. The daily trigger is a
-   GitHub Actions scheduled workflow (`.github/workflows/credential-sweep.yml`)
-   calling `POST /api/cron/credential-sweep`, since Render's free tier has no
-   built-in scheduler — this replaces the old load-triggered-only sweep (that
-   still runs too, as a fallback, whenever a notification page loads).
-   **One manual step left:** push tokens need the mobile project linked to
-   EAS (`extra.eas.projectId` in `app.json`) before real device tokens can be
-   issued — run `eas init` from `mobile/` (needs an Expo account) and
-   rebuild. Until then, `registerForPushNotificationsAsync()` no-ops with a
-   console warning instead of crashing. Two required env vars for the cron
-   path: `CRON_SECRET` set to the same value in Render's dashboard and as a
-   GitHub Actions repo secret (Settings → Secrets and variables → Actions).
-   SMS/email delivery is still an open choice if push isn't enough on its
-   own.
+6. **Notification delivery — in-app + push done.** Credential-expiry
+   reminders exist as in-app notifications (idempotent sweep, 2 months
+   before expiration, worker + unit managers) *and* as real push
+   notifications via Expo's push API (`src/lib/push.ts`), sent alongside
+   every notification the sweep creates. The daily trigger is a GitHub
+   Actions scheduled workflow (`.github/workflows/credential-sweep.yml`)
+   calling `POST /api/cron/credential-sweep`, since Render's free tier has
+   no built-in scheduler — this replaces the old load-triggered-only sweep
+   (that still runs too, as a fallback, whenever a notification page loads).
+   The mobile app is linked to an EAS project (`extra.eas.projectId` in
+   `app.json`, owner `stat-workforce`), so
+   `registerForPushNotificationsAsync()` can issue real device push tokens
+   instead of no-op'ing — confirmed the project ID is actually embedded in
+   the built app (`EXConstants.bundle/app.config`), not just the source
+   file. Two required env vars for the cron path: `CRON_SECRET` set to the
+   same value in Render's dashboard and as a GitHub Actions repo secret
+   (Settings → Secrets and variables → Actions). SMS/email delivery is still
+   an open choice if push isn't enough on its own.
 
 ## Deploying to Render
 
@@ -462,9 +462,11 @@ means the device itself, not your dev machine.
   confirmed `sendPushToUser` calls Expo's push API with the right payload
   shape (Expo's API echoed back its documented per-token error format for a
   deliberately fake test token, proving the request itself is well-formed).
-  **Not yet verified: an actual push landing on a device**, because that
-  needs a real Expo push token, which needs the project linked to EAS first
-  (`eas init` — see the "Notification delivery" section above). Once that's
-  done, `registerForPushNotificationsAsync()` in
-  `mobile/src/lib/push-notifications.ts` should register a real token on
-  next login and the rest of the chain is already wired and tested.
+  The mobile app is now linked to an EAS project (`eas init`, done — see
+  "Notification delivery" above), confirmed embedded in the rebuilt app's
+  `EXConstants.bundle/app.config`, so `registerForPushNotificationsAsync()`
+  should register a real token on next login. **Not yet confirmed: an
+  actual push landing on the device** — that needs signing in on the
+  Simulator and checking a notification arrives once a credential is due,
+  which wasn't hand-tested here (same computer-use/simctl limitations as
+  the rest of this section).
