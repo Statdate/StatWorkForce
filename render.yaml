@@ -24,6 +24,11 @@ services:
           property: connectionString
       - key: SESSION_SECRET
         sync: false
+      # Shared secret for the GitHub Actions daily cron
+      # (.github/workflows/credential-sweep.yml) — must match the repo's
+      # CRON_SECRET Actions secret. Generate with: openssl rand -base64 32
+      - key: CRON_SECRET
+        sync: false
       # Deliberately NOT setting NODE_ENV here: Render sets it to "production"
       # for the running service automatically, but declaring it as an envVar
       # also applies it during the build phase, which makes `npm install`

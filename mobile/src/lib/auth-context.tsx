@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { getItem, setItem, deleteItem } from "@/lib/storage";
 import { login as apiLogin, getMe, TOKEN_KEY } from "@/lib/api";
+import { registerForPushNotificationsAsync } from "@/lib/push-notifications";
 
 type AuthUser = {
   id: string;
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const me = await getMe();
           setUser(me);
+          registerForPushNotificationsAsync();
         } catch {
           await deleteItem(TOKEN_KEY);
         }
@@ -43,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setItem(TOKEN_KEY, token);
     const me = await getMe();
     setUser(me ?? { ...loggedInUser, badgeNumber });
+    registerForPushNotificationsAsync();
   }
 
   async function signOut() {

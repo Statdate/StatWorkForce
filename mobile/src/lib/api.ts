@@ -191,4 +191,11 @@ export function sendMessage(recipientId: string, body: string) {
   });
 }
 
+export function registerPushToken(token: string) {
+  return request<{ ok: true }>("/api/me/push-token", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
 export { TOKEN_KEY };

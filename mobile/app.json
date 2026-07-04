@@ -45,6 +45,13 @@
         {
           "calendarPermission": "Stat Workforce would like to add your published shifts to your calendar."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#0f172a"
+        }
       ]
     ],
     "experiments": {
