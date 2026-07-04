@@ -262,17 +262,24 @@ src/app/login/              Badge number + password login
    S3/R2 by replacing only `saveCredentialFileForUser` /
    `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
    touches the bytes.
-6. **Notification delivery — in-app done, push/SMS/email still open.**
-   Credential-expiry reminders now exist as in-app notifications: an
-   idempotent sweep (`ensureCredentialExpiryNotifications`) fires 2 months
-   before expiration, notifying the worker and every manager of their
-   unit(s), guarded by `workerReminderSentAt`/`managerReminderSentAt` so
-   re-runs never duplicate. Two production-hardening gaps remain: (a) the
-   sweep runs when notification surfaces load (worker/manager credential
-   pages, `/api/notifications`) because there's no job runner — a daily cron
-   should replace that; (b) nothing pushes to a locked phone — APNs/FCM (via
-   Expo push), SMS, or email delivery still needs choosing before reminders
-   reach someone who never opens the app.
+6. **Notification delivery — in-app + push done, one setup step remains.**
+   Credential-expiry reminders exist as in-app notifications (idempotent
+   sweep, 2 months before expiration, worker + unit managers) *and* as real
+   push notifications via Expo's push API (`src/lib/push.ts`), sent
+   alongside every notification the sweep creates. The daily trigger is a
+   GitHub Actions scheduled workflow (`.github/workflows/credential-sweep.yml`)
+   calling `POST /api/cron/credential-sweep`, since Render's free tier has no
+   built-in scheduler — this replaces the old load-triggered-only sweep (that
+   still runs too, as a fallback, whenever a notification page loads).
+   **One manual step left:** push tokens need the mobile project linked to
+   EAS (`extra.eas.projectId` in `app.json`) before real device tokens can be
+   issued — run `eas init` from `mobile/` (needs an Expo account) and
+   rebuild. Until then, `registerForPushNotificationsAsync()` no-ops with a
+   console warning instead of crashing. Two required env vars for the cron
+   path: `CRON_SECRET` set to the same value in Render's dashboard and as a
+   GitHub Actions repo secret (Settings → Secrets and variables → Actions).
+   SMS/email delivery is still an open choice if push isn't enough on its
+   own.
 
 ## Deploying to Render
 
@@ -449,3 +456,15 @@ means the device itself, not your dev machine.
   installed cleanly. Not yet hand-tested on the Simulator: tapping **Upload
   document**, picking a file from the Files app, and seeing the card flip to
   "Document: <name>". That's the next thing to poke at in the Simulator.
+- **Push notifications**: `expo-notifications` compiled and installed
+  cleanly in the native build. The backend half is fully verified — `POST
+  /api/me/push-token` accepts/rejects tokens correctly, and a real sweep run
+  confirmed `sendPushToUser` calls Expo's push API with the right payload
+  shape (Expo's API echoed back its documented per-token error format for a
+  deliberately fake test token, proving the request itself is well-formed).
+  **Not yet verified: an actual push landing on a device**, because that
+  needs a real Expo push token, which needs the project linked to EAS first
+  (`eas init` — see the "Notification delivery" section above). Once that's
+  done, `registerForPushNotificationsAsync()` in
+  `mobile/src/lib/push-notifications.ts` should register a real token on
+  next login and the rest of the chain is already wired and tested.
