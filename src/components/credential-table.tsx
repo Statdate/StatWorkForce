@@ -1,5 +1,6 @@
 import type { CredentialType } from "@/generated/prisma/client";
 import { credentialDisplayName, credentialStatus } from "@/lib/credential-types";
+import { CredentialPreviewButton } from "@/components/credential-preview-button";
 
 export type CredentialRow = {
   id: string;
@@ -9,6 +10,7 @@ export type CredentialRow = {
   credentialNumber: string | null;
   expirationDate: Date;
   fileName: string | null;
+  fileMimeType: string | null;
   user: { id: string; firstName: string; lastName: string; badgeNumber: string };
   unitNames?: string[];
 };
@@ -70,13 +72,24 @@ export function CredentialTable({
                 <td className="px-4 py-3">
                   {row.fileName ? (
                     <>
-                      <a
-                        href={`/api/credentials/${row.id}/file`}
-                        target="_blank"
-                        className="text-slate-900 underline underline-offset-2 hover:text-slate-600 print:hidden"
-                      >
-                        View
-                      </a>
+                      <span className="print:hidden">
+                        {row.fileMimeType && (
+                          <>
+                            <CredentialPreviewButton
+                              credentialId={row.id}
+                              fileMimeType={row.fileMimeType}
+                              fileName={row.fileName}
+                            />{" "}
+                          </>
+                        )}
+                        <a
+                          href={`/api/credentials/${row.id}/file`}
+                          target="_blank"
+                          className="text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                        >
+                          Download
+                        </a>
+                      </span>
                       <span className="hidden print:inline">Yes</span>
                     </>
                   ) : (

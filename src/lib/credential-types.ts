@@ -13,7 +13,7 @@ export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
   CCRN: "CCRN",
   CMC: "CMC",
   ADVANCED_DEGREE: "Advanced Degree",
-  OTHER: "Specialty certification / Other",
+  OTHER: "Custom / Other",
 };
 
 export const CREDENTIAL_TYPE_OPTIONS = Object.entries(CREDENTIAL_TYPE_LABELS) as [

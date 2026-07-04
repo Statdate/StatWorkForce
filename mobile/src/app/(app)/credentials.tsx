@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { getCredentials, uploadCredentialFile, type Credential } from '@/lib/api';
+import * as WebBrowser from 'expo-web-browser';
+import { getCredentials, uploadCredentialFile, getCredentialFileDataUri, type Credential } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -32,6 +33,8 @@ export default function CredentialsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ id: string; message: string } | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<{ id: string; message: string } | null>(null);
 
   const load = useCallback(async () => {
     const { credentials } = await getCredentials();
@@ -72,6 +75,22 @@ export default function CredentialsScreen() {
     }
   }
 
+  async function handlePreview(credentialId: string) {
+    setPreviewError(null);
+    setPreviewingId(credentialId);
+    try {
+      const dataUri = await getCredentialFileDataUri(credentialId);
+      await WebBrowser.openBrowserAsync(dataUri);
+    } catch (error) {
+      setPreviewError({
+        id: credentialId,
+        message: error instanceof Error ? error.message : 'Could not open document.',
+      });
+    } finally {
+      setPreviewingId(null);
+    }
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -90,6 +109,7 @@ export default function CredentialsScreen() {
           renderItem={({ item }) => {
             const status = credentialStatus(item.expirationDate);
             const isUploading = uploadingId === item.id;
+            const isPreviewing = previewingId === item.id;
             return (
               <ThemedView type="backgroundElement" style={styles.card}>
                 <ThemedText type="smallBold">
@@ -113,21 +133,38 @@ export default function CredentialsScreen() {
                       }`
                     : 'No document uploaded yet.'}
                 </ThemedText>
-                <Pressable
-                  onPress={() => handleUpload(item.id)}
-                  disabled={isUploading}
-                  style={styles.uploadButton}>
-                  <ThemedText type="small" style={styles.uploadText}>
-                    {isUploading
-                      ? 'Uploading…'
-                      : item.fileName
-                        ? 'Replace document'
-                        : 'Upload document'}
-                  </ThemedText>
-                </Pressable>
+                <ThemedView style={styles.buttonRow}>
+                  {item.fileName && (
+                    <Pressable
+                      onPress={() => handlePreview(item.id)}
+                      disabled={isPreviewing}
+                      style={styles.previewButton}>
+                      <ThemedText type="small" style={styles.previewText}>
+                        {isPreviewing ? 'Opening…' : 'Preview'}
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    onPress={() => handleUpload(item.id)}
+                    disabled={isUploading}
+                    style={styles.uploadButton}>
+                    <ThemedText type="small" style={styles.uploadText}>
+                      {isUploading
+                        ? 'Uploading…'
+                        : item.fileName
+                          ? 'Replace document'
+                          : 'Upload document'}
+                    </ThemedText>
+                  </Pressable>
+                </ThemedView>
                 {uploadError?.id === item.id && (
                   <ThemedText type="small" style={styles.errorText}>
                     {uploadError.message}
+                  </ThemedText>
+                )}
+                {previewError?.id === item.id && (
+                  <ThemedText type="small" style={styles.errorText}>
+                    {previewError.message}
                   </ThemedText>
                 )}
               </ThemedView>
@@ -145,14 +182,23 @@ const styles = StyleSheet.create({
   list: { padding: Spacing.three, gap: Spacing.two },
   card: { borderRadius: Spacing.two, padding: Spacing.three, gap: 4 },
   empty: { textAlign: 'center', marginTop: Spacing.six },
+  buttonRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.one },
   uploadButton: {
     alignSelf: 'flex-start',
-    marginTop: Spacing.one,
     backgroundColor: '#0f172a',
     borderRadius: Spacing.one,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
   },
   uploadText: { color: '#fff', fontWeight: '600' },
+  previewButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#0f172a',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  previewText: { color: '#0f172a', fontWeight: '600' },
   errorText: { color: '#dc2626' },
 });

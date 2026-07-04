@@ -4,6 +4,7 @@ import { addCredentialAction, uploadCredentialFileAction } from "@/app/actions/c
 import { CREDENTIAL_TYPE_OPTIONS, credentialDisplayName } from "@/lib/credential-types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
+import { CredentialPreviewButton } from "@/components/credential-preview-button";
 
 const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
 
@@ -52,12 +53,22 @@ export default async function WorkerCredentialsPage() {
               <div className="mt-3 border-t border-slate-100 pt-3">
                 {credential.fileName ? (
                   <p className="text-xs text-slate-500">
+                    {credential.fileMimeType && (
+                      <>
+                        <CredentialPreviewButton
+                          credentialId={credential.id}
+                          fileMimeType={credential.fileMimeType}
+                          fileName={credential.fileName}
+                        />{" "}
+                        ·{" "}
+                      </>
+                    )}
                     <a
                       href={`/api/credentials/${credential.id}/file`}
                       target="_blank"
-                      className="font-medium text-slate-900 underline underline-offset-2 hover:text-slate-600"
+                      className="text-slate-500 underline underline-offset-2 hover:text-slate-700"
                     >
-                      View document
+                      Download
                     </a>{" "}
                     · {credential.fileName}
                     {credential.fileUploadedAt &&

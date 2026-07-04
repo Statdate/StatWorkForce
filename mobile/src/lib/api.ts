@@ -120,6 +120,31 @@ export async function uploadCredentialFile(
   return body as { ok: true };
 }
 
+/** Fetches the uploaded credential document and returns it as a data: URI.
+ * There's no way to attach an Authorization header to a plain URL open (in-
+ * app browser, Linking, etc.), so the file has to be fetched here — with the
+ * Bearer token — and handed to the caller as a self-contained URI instead.
+ * WebKit (and therefore expo-web-browser's in-app browser) can render both
+ * images and PDFs directly from a data: URI, so this covers both without
+ * needing a PDF-rendering dependency. */
+export async function getCredentialFileDataUri(credentialId: string): Promise<string> {
+  const token = await getItem(TOKEN_KEY);
+  const response = await fetch(`${API_URL}/api/credentials/${credentialId}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(body?.error ?? "Could not load document", response.status);
+  }
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read document"));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+}
+
 export type OpenShift = {
   id: string;
   startTime: string;
