@@ -69,15 +69,35 @@ export async function getManagerUnits() {
 
 /** Shifts + fill counts for a unit's current schedule period (census view). */
 export async function getUnitCensus(unitId: string, from: Date, to: Date) {
-  await assertUnitInScope(unitId);
+  const user = await assertUnitInScope(unitId);
+  return getUnitScheduleForManager(user, from, to, [unitId]);
+}
+
+/** Same as getUnitCensus(), but across every unit a manager/admin is scoped
+ * to (or the given subset) — mobile's Unit Schedule calendar has no
+ * per-unit navigation like web's [unitId] pages, so it shows one combined
+ * view. Assignments carry full user info (not just a count) so the mobile
+ * UI can list who's covering a shift and who's still requested/pending
+ * without a second round trip. */
+export async function getUnitScheduleForManager(
+  manager: CurrentUser,
+  from: Date,
+  to: Date,
+  unitIds?: string[]
+) {
+  const scoped = unitIds ?? (await allScopedUnitIds(manager));
+  if (scoped.length === 0) return [];
 
   const shifts = await prisma.shift.findMany({
-    where: { unitId, startTime: { gte: from, lt: to } },
+    where: { unitId: { in: scoped }, startTime: { gte: from, lt: to } },
     include: {
+      unit: { select: { id: true, name: true } },
       jobType: { select: { name: true } },
       assignments: {
         where: { status: { not: "DROPPED" } },
-        include: { user: { select: { firstName: true, lastName: true } } },
+        include: {
+          user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+        },
       },
     },
     orderBy: { startTime: "asc" },
@@ -89,6 +109,61 @@ export async function getUnitCensus(unitId: string, from: Date, to: Date) {
     isUnderstaffed: shift.assignments.length < shift.requiredCount,
     isOverstaffed: shift.assignments.length > shift.requiredCount,
   }));
+}
+
+/** Workers (not other managers) assigned to a unit — the candidate list for
+ * offerShiftToWorker()'s "offer this shift to" picker. */
+export async function getUnitWorkersForManager(manager: CurrentUser, unitId: string) {
+  const allowedUnitIds = scopedUnitIds(manager);
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(unitId)) {
+    throw new ForbiddenUnitError(unitId);
+  }
+
+  return prisma.user.findMany({
+    where: { accountType: "WORKER", unitMemberships: { some: { unitId } }, isActive: true },
+    select: { id: true, firstName: true, lastName: true, badgeNumber: true },
+    orderBy: { lastName: "asc" },
+  });
+}
+
+/** Directly assign a shift to a specific worker (AssignmentStatus.MANAGER_ASSIGNED)
+ * — unlike a self-scheduled pickup, this doesn't need a second approval step
+ * since the manager is the one initiating it. Upserts so re-offering (or
+ * offering a shift the worker already picked up) just updates the status. */
+export async function offerShiftToWorker(manager: CurrentUser, shiftId: string, workerId: string) {
+  if (manager.accountType !== "MANAGER" && manager.accountType !== "ADMIN") {
+    throw new Error("Only managers can offer shifts");
+  }
+
+  const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
+  if (!shift) throw new Error("Shift not found");
+
+  const allowedUnitIds = scopedUnitIds(manager);
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(shift.unitId)) {
+    throw new ForbiddenUnitError(shift.unitId);
+  }
+
+  const worker = await prisma.user.findUnique({
+    where: { id: workerId },
+    select: { id: true, accountType: true, unitMemberships: { select: { unitId: true } } },
+  });
+  if (!worker || worker.accountType !== "WORKER") throw new Error("Worker not found");
+  if (!worker.unitMemberships.some((m) => m.unitId === shift.unitId)) {
+    throw new Error("That worker isn't assigned to this shift's unit");
+  }
+
+  await prisma.scheduleAssignment.upsert({
+    where: { shiftId_userId: { shiftId, userId: workerId } },
+    update: { status: "MANAGER_ASSIGNED" },
+    create: { shiftId, userId: workerId, status: "MANAGER_ASSIGNED" },
+  });
+
+  const shiftDate = shift.startTime.toLocaleDateString();
+  const title = `You've been offered a shift on ${shiftDate}`;
+  await prisma.notification.create({
+    data: { userId: workerId, type: "GENERAL", title, body: "Check My Schedule for details." },
+  });
+  await sendPushToUser(workerId, title, "Check My Schedule for details.");
 }
 
 /** Pending timecard entries awaiting manager approval, scoped to the manager's units. */
@@ -155,6 +230,20 @@ export async function getPendingShiftPickups(unitId: string) {
  * instead of leaving a phantom "rejected" row blocking the slot. */
 export async function setShiftPickupApproval(assignmentId: string, decision: "APPROVED" | "DENIED") {
   const user = await requireRole("MANAGER", "ADMIN");
+  return setShiftPickupApprovalForManager(user, assignmentId, decision);
+}
+
+/** Same as setShiftPickupApproval(), but takes an already-resolved manager
+ * instead of calling requireRole() itself, so mobile's API route (which
+ * resolves the user from a Bearer token, not cookies) can call it. */
+export async function setShiftPickupApprovalForManager(
+  user: CurrentUser,
+  assignmentId: string,
+  decision: "APPROVED" | "DENIED"
+) {
+  if (user.accountType !== "MANAGER" && user.accountType !== "ADMIN") {
+    throw new Error("Only managers can review shift pickups");
+  }
   const allowedUnitIds = scopedUnitIds(user);
 
   const assignment = await prisma.scheduleAssignment.findUnique({

@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { SectionList, RefreshControl, StyleSheet, Pressable } from 'react-native';
+import { SectionList, RefreshControl, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   getSchedule,
   getOpenShifts,
   signUpForShift,
+  getManagerSchedule,
   ApiError,
   type ScheduleAssignment,
   type OpenShift,
+  type ManagerShift,
 } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScheduleCalendar } from '@/components/schedule-calendar';
+import { UnitScheduleCalendar } from '@/components/unit-schedule-calendar';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/lib/auth-context';
 
@@ -46,9 +49,15 @@ type Section =
   | { key: 'mine'; title: string; data: ScheduleAssignment[] }
   | { key: 'open'; title: string; data: OpenShift[] };
 
+/** Managers (ADA/assistant ADA) don't pick up shifts themselves, so this tab
+ * shows their unit's staffing calendar instead of a personal shift list. */
 export default function ScheduleScreen() {
   const { user } = useAuth();
   const isWorker = user?.accountType === 'WORKER';
+  return isWorker ? <WorkerScheduleView /> : <ManagerUnitScheduleView />;
+}
+
+function WorkerScheduleView() {
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,19 +68,14 @@ export default function ScheduleScreen() {
 
   const load = useCallback(async () => {
     try {
-      if (isWorker) {
-        const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
-        setAssignments(assignments);
-        setOpenShifts(shifts);
-      } else {
-        const { assignments } = await getSchedule();
-        setAssignments(assignments);
-      }
+      const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
+      setAssignments(assignments);
+      setOpenShifts(shifts);
       setLoadError(null);
     } catch (e) {
       setLoadError(errorMessage(e));
     }
-  }, [isWorker]);
+  }, []);
 
   useEffect(() => {
     load().finally(() => setIsLoading(false));
@@ -96,12 +100,10 @@ export default function ScheduleScreen() {
     }
   }
 
-  const sections: Section[] = isWorker
-    ? [
-        { key: 'mine', title: 'My Shifts', data: assignments },
-        { key: 'open', title: 'Open Shifts', data: openShifts },
-      ]
-    : [{ key: 'mine', title: 'My Shifts', data: assignments }];
+  const sections: Section[] = [
+    { key: 'mine', title: 'My Shifts', data: assignments },
+    { key: 'open', title: 'Open Shifts', data: openShifts },
+  ];
 
   return (
     <ThemedView style={styles.container}>
@@ -246,4 +248,81 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   signUpText: { color: '#fff', fontWeight: '600' },
+});
+
+function ManagerUnitScheduleView() {
+  const [shifts, setShifts] = useState<ManagerShift[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { shifts } = await getManagerSchedule();
+      setShifts(shifts);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(errorMessage(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    load().finally(() => setIsLoading(false));
+  }, [load]);
+
+  async function onRefresh() {
+    setIsRefreshing(true);
+    await load();
+    setIsRefreshing(false);
+  }
+
+  return (
+    <ThemedView style={managerStyles.container}>
+      <SafeAreaView style={managerStyles.safeArea} edges={['left', 'right']}>
+        <ScrollView
+          contentContainerStyle={managerStyles.scrollContent}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
+          {loadError && (
+            <ThemedView type="backgroundElement" style={managerStyles.errorCard}>
+              <ThemedText style={managerStyles.errorText} accessibilityRole="alert">
+                {loadError}
+              </ThemedText>
+              <Pressable
+                onPress={load}
+                accessibilityRole="button"
+                accessibilityLabel="Retry"
+                style={managerStyles.retryButton}>
+                <ThemedText type="small" style={managerStyles.retryText}>
+                  Retry
+                </ThemedText>
+              </Pressable>
+            </ThemedView>
+          )}
+          {!isLoading && !loadError && shifts.length === 0 ? (
+            <ThemedText themeColor="textSecondary" style={managerStyles.empty}>
+              No shifts scheduled for your units yet.
+            </ThemedText>
+          ) : (
+            <UnitScheduleCalendar shifts={shifts} onRefresh={load} />
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+const managerStyles = StyleSheet.create({
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  scrollContent: { padding: Spacing.three },
+  empty: { textAlign: 'center', marginTop: Spacing.six },
+  errorCard: {
+    borderRadius: Spacing.two,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    gap: Spacing.one,
+  },
+  errorText: { color: '#dc2626' },
+  retryButton: { alignSelf: 'flex-start' },
+  retryText: { color: '#0f172a', fontWeight: '600', textDecorationLine: 'underline' },
 });

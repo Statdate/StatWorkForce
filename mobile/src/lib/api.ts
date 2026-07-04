@@ -369,4 +369,59 @@ export function getManagerCredentials() {
   }>("/api/manager/credentials");
 }
 
+export type ManagerShiftAssignment = {
+  id: string;
+  status: string;
+  user: { id: string; firstName: string; lastName: string; badgeNumber: string };
+};
+
+export type ManagerShift = {
+  id: string;
+  unitId: string;
+  startTime: string;
+  endTime: string;
+  requiredCount: number;
+  filledCount: number;
+  isUnderstaffed: boolean;
+  isOverstaffed: boolean;
+  unit: { id: string; name: string };
+  jobType: { name: string };
+  assignments: ManagerShiftAssignment[];
+};
+
+export function getManagerSchedule(from?: string, to?: string) {
+  const params = new URLSearchParams();
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const query = params.toString();
+  return request<{ shifts: ManagerShift[] }>(`/api/manager/schedule${query ? `?${query}` : ""}`);
+}
+
+export type ManagerUnitWorker = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  badgeNumber: string;
+};
+
+export function getUnitWorkers(unitId: string) {
+  return request<{ workers: ManagerUnitWorker[] }>(
+    `/api/manager/schedule/staff?unitId=${encodeURIComponent(unitId)}`
+  );
+}
+
+export function offerShift(shiftId: string, workerId: string) {
+  return request<{ ok: true }>("/api/manager/schedule/offer", {
+    method: "POST",
+    body: JSON.stringify({ shiftId, workerId }),
+  });
+}
+
+export function reviewShiftPickup(assignmentId: string, decision: "APPROVED" | "DENIED") {
+  return request<{ ok: true }>(`/api/manager/schedule/pickups/${assignmentId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ decision }),
+  });
+}
+
 export { TOKEN_KEY };

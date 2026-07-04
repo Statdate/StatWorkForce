@@ -24,7 +24,7 @@ export default function AppTabsLayout() {
         <HospitalBanner />
       </SafeAreaView>
       <Tabs screenOptions={{ headerRight: () => <SignOutButton /> }}>
-        <Tabs.Screen name="index" options={{ title: 'My Schedule' }} />
+        <Tabs.Screen name="index" options={{ title: isWorker ? 'My Schedule' : 'Unit Schedule' }} />
         <Tabs.Screen
           name="time-off"
           options={{ title: isWorker ? 'Time Off' : 'Time Off Requests' }}
