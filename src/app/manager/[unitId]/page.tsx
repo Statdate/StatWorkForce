@@ -98,6 +98,12 @@ export default async function ManagerUnitPage({
       >
         Messages
       </Link>
+      <Link
+        href={`/manager/${unitId}/alerts`}
+        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
+      >
+        Alerts
+      </Link>
     </div>
   );
 

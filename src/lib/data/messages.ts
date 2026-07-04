@@ -118,6 +118,53 @@ export async function getUnitMessageThreads(unitId: string) {
   return withUnreadCounts(user.id, memberships.map((m) => m.user));
 }
 
+/** All unit IDs a manager/admin is scoped to — mirrors the identically-named
+ * helper in src/lib/data/manager.ts. Kept local rather than imported so this
+ * file doesn't take on a cross-module dependency for four lines of logic. */
+async function allManagerUnitIds(user: CurrentUser): Promise<string[]> {
+  const scoped = scopedUnitIds(user);
+  if (scoped !== null) return scoped;
+  const units = await prisma.unit.findMany({
+    where: { hospitalId: user.hospitalId },
+    select: { id: true },
+  });
+  return units.map((u) => u.id);
+}
+
+/** Every worker across every unit the manager/admin is scoped to — the
+ * candidate list for the Messages page's "compose" search. Unlike
+ * getUnitMessageThreads(), which is scoped to a single unit (matching the
+ * page's URL), this spans all of them so a manager with several units can
+ * search across their whole staff to start a new conversation. Each entry
+ * carries a unitId the recipient actually belongs to, since the message
+ * thread route is nested under /manager/[unitId]/messages/[workerId]. */
+export async function getManagerStaffDirectory() {
+  const user = await requireRole("MANAGER", "ADMIN");
+  const unitIds = await allManagerUnitIds(user);
+  if (unitIds.length === 0) return [];
+
+  const memberships = await prisma.unitMembership.findMany({
+    where: { unitId: { in: unitIds }, user: { accountType: "WORKER" } },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, title: true, badgeNumber: true } },
+      unit: { select: { id: true, name: true } },
+    },
+    distinct: ["userId"],
+  });
+
+  return memberships
+    .map((m) => ({
+      id: m.user.id,
+      firstName: m.user.firstName,
+      lastName: m.user.lastName,
+      title: m.user.title,
+      badgeNumber: m.user.badgeNumber,
+      unitId: m.unit.id,
+      unitName: m.unit.name,
+    }))
+    .sort((a, b) => a.lastName.localeCompare(b.lastName));
+}
+
 async function withUnreadCounts(myUserId: string, partners: ThreadPartner[]) {
   const unread = await prisma.message.findMany({
     where: {

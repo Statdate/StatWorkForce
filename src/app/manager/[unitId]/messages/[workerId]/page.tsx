@@ -6,6 +6,7 @@ import { getConversation, getUnitMessageThreads } from "@/lib/data/messages";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { MessageThread } from "@/components/message-thread";
 import { ActionErrorBanner } from "@/components/action-error-banner";
+import { ManagerNav } from "@/components/manager-nav";
 
 export default async function ManagerMessageThreadPage({
   params,
@@ -30,7 +31,11 @@ export default async function ManagerMessageThreadPage({
   if (!activeWorker) notFound();
 
   return (
-    <DashboardShell roleLabel="Manager" userName={`${user.firstName} ${user.lastName}`}>
+    <DashboardShell
+      roleLabel="Manager"
+      userName={`${user.firstName} ${user.lastName}`}
+      nav={<ManagerNav unitId={unitId} active="messages" />}
+    >
       <div className="mb-4">
         <Link href={`/manager/${unitId}/messages`} className="text-sm text-slate-500 hover:text-slate-900">
           ← All conversations

@@ -2,8 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { getManagerUnits } from "@/lib/data/manager";
-import { getUnitMessageThreads } from "@/lib/data/messages";
+import { getUnitMessageThreads, getManagerStaffDirectory } from "@/lib/data/messages";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { ManagerNav } from "@/components/manager-nav";
+import { StaffComposePicker } from "@/components/staff-compose-picker";
 
 export default async function ManagerMessagesPage({
   params,
@@ -15,12 +17,25 @@ export default async function ManagerMessagesPage({
   const activeUnit = units.find((u) => u.id === unitId);
   if (!activeUnit) notFound();
 
-  const [user, threads] = await Promise.all([getCurrentUser(), getUnitMessageThreads(unitId)]);
+  const [user, threads, staffDirectory] = await Promise.all([
+    getCurrentUser(),
+    getUnitMessageThreads(unitId),
+    getManagerStaffDirectory(),
+  ]);
 
   return (
-    <DashboardShell roleLabel="Manager" userName={`${user.firstName} ${user.lastName}`}>
-      <h1 className="text-2xl font-semibold text-slate-900">Messages — {activeUnit.name}</h1>
-      <p className="mt-1 text-sm text-slate-500">Private messages with your unit&apos;s staff.</p>
+    <DashboardShell
+      roleLabel="Manager"
+      userName={`${user.firstName} ${user.lastName}`}
+      nav={<ManagerNav unitId={unitId} active="messages" />}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Messages — {activeUnit.name}</h1>
+          <p className="mt-1 text-sm text-slate-500">Private messages with your unit&apos;s staff.</p>
+        </div>
+        <StaffComposePicker staff={staffDirectory} />
+      </div>
 
       <div className="mt-6 space-y-2">
         {threads.map((worker) => (

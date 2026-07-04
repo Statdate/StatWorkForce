@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { getManagerUnits, getUnitCredentials } from "@/lib/data/manager";
@@ -6,6 +5,7 @@ import { ensureCredentialExpiryNotifications, getMyNotifications } from "@/lib/d
 import { DashboardShell } from "@/components/dashboard-shell";
 import { CredentialTable } from "@/components/credential-table";
 import { PrintButton } from "@/components/print-button";
+import { ManagerNav } from "@/components/manager-nav";
 
 export default async function ManagerCredentialsPage({
   params,
@@ -31,29 +31,7 @@ export default async function ManagerCredentialsPage({
 
   const unreadAlerts = notifications.filter((n) => !n.readAt);
 
-  const nav = (
-    <div className="flex flex-wrap gap-2 print:hidden">
-      <Link
-        href={`/manager/${unitId}`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Dashboard
-      </Link>
-      <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Credentials</span>
-      <Link
-        href={`/manager/${unitId}/time-off`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Time off
-      </Link>
-      <Link
-        href={`/manager/${unitId}/messages`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Messages
-      </Link>
-    </div>
-  );
+  const nav = <ManagerNav unitId={unitId} active="credentials" />;
 
   return (
     <DashboardShell

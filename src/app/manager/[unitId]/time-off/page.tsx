@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { getManagerUnits, getUnitTimeOffRequests } from "@/lib/data/manager";
@@ -6,6 +5,7 @@ import { reviewTimeOffRequestAction } from "@/app/actions/timeoff";
 import { TIME_OFF_TYPE_LABELS, timeOffStatusStyle } from "@/lib/timeoff-types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ActionErrorBanner } from "@/components/action-error-banner";
+import { ManagerNav } from "@/components/manager-nav";
 
 export default async function ManagerTimeOffPage({
   params,
@@ -30,29 +30,7 @@ export default async function ManagerTimeOffPage({
   const pending = requests.filter((r) => r.status === "PENDING");
   const decided = requests.filter((r) => r.status !== "PENDING");
 
-  const nav = (
-    <div className="flex flex-wrap gap-2">
-      <Link
-        href={`/manager/${unitId}`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Dashboard
-      </Link>
-      <Link
-        href={`/manager/${unitId}/credentials`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Credentials
-      </Link>
-      <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Time off</span>
-      <Link
-        href={`/manager/${unitId}/messages`}
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Messages
-      </Link>
-    </div>
-  );
+  const nav = <ManagerNav unitId={unitId} active="time-off" />;
 
   return (
     <DashboardShell roleLabel="Manager" userName={`${user.firstName} ${user.lastName}`} nav={nav}>
