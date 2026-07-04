@@ -7,10 +7,22 @@ import {
   getApprovalQueue,
   getUnitStaff,
   getSchedulePeriods,
+  getScheduleRequestsForPeriod,
 } from "@/lib/data/manager";
 import { approveTimeEntryAction, rejectTimeEntryAction } from "@/app/actions/timecards";
 import { publishSchedulePeriodAction } from "@/app/actions/schedulePeriods";
+import {
+  createScheduleRequestWindowAction,
+  closeScheduleRequestWindowAction,
+} from "@/app/actions/schedule-requests";
 import { DashboardShell } from "@/components/dashboard-shell";
+
+function priorityBadgeClassName(rank: number | undefined) {
+  if (rank === 1) return "bg-emerald-100 text-emerald-700";
+  if (rank === 2) return "bg-amber-100 text-amber-700";
+  if (rank !== undefined) return "bg-slate-100 text-slate-600";
+  return "bg-slate-100 text-slate-400";
+}
 
 export default async function ManagerUnitPage({
   params,
@@ -35,6 +47,15 @@ export default async function ManagerUnitPage({
     getUnitStaff(unitId),
     getSchedulePeriods(unitId),
   ]);
+
+  const openPeriods = schedulePeriods.filter((p) => p.requestsOpen);
+  const requestsByPeriod = new Map(
+    await Promise.all(
+      openPeriods.map(
+        async (p) => [p.id, await getScheduleRequestsForPeriod(p.id)] as const
+      )
+    )
+  );
 
   const nav = (
     <div className="flex flex-wrap gap-2">
@@ -142,6 +163,29 @@ export default async function ManagerUnitPage({
         <p className="text-xs text-slate-400">
           Publishing lets workers sync that period&apos;s shifts to their phone calendar.
         </p>
+
+        <form
+          action={createScheduleRequestWindowAction}
+          className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <input type="hidden" name="unitId" value={unitId} />
+          <label className="block text-sm">
+            <span className="text-slate-700">Release a 6-week period for requests</span>
+            <input
+              type="date"
+              name="startDate"
+              required
+              className="mt-1 block rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+          >
+            Release
+          </button>
+        </form>
+
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           {schedulePeriods.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">No schedule periods yet.</p>
@@ -151,6 +195,7 @@ export default async function ManagerUnitPage({
                 <tr>
                   <th className="px-4 py-2">Period</th>
                   <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Requests</th>
                   <th className="px-4 py-2">Actions</th>
                 </tr>
               </thead>
@@ -174,18 +219,41 @@ export default async function ManagerUnitPage({
                       )}
                     </td>
                     <td className="px-4 py-2">
-                      {period.status === "DRAFT" && (
-                        <form action={publishSchedulePeriodAction}>
-                          <input type="hidden" name="schedulePeriodId" value={period.id} />
-                          <input type="hidden" name="unitId" value={unitId} />
-                          <button
-                            type="submit"
-                            className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
-                          >
-                            Publish
-                          </button>
-                        </form>
+                      {period.requestsOpen ? (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700">
+                          Open · {requestsByPeriod.get(period.id)?.length ?? 0} submitted
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        {period.status === "DRAFT" && (
+                          <form action={publishSchedulePeriodAction}>
+                            <input type="hidden" name="schedulePeriodId" value={period.id} />
+                            <input type="hidden" name="unitId" value={unitId} />
+                            <button
+                              type="submit"
+                              className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-700"
+                            >
+                              Publish
+                            </button>
+                          </form>
+                        )}
+                        {period.requestsOpen && (
+                          <form action={closeScheduleRequestWindowAction}>
+                            <input type="hidden" name="schedulePeriodId" value={period.id} />
+                            <input type="hidden" name="unitId" value={unitId} />
+                            <button
+                              type="submit"
+                              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                            >
+                              Close requests
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -193,6 +261,46 @@ export default async function ManagerUnitPage({
             </table>
           )}
         </div>
+
+        {openPeriods.map((period) => {
+          const requests = requestsByPeriod.get(period.id) ?? [];
+          if (requests.length === 0) return null;
+          return (
+            <div key={period.id} className="mt-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-medium text-slate-900">
+                Submitted requests — {period.startDate.toLocaleDateString()} –{" "}
+                {period.endDate.toLocaleDateString()}
+              </h3>
+              <div className="mt-3 space-y-3">
+                {requests.map((request) => (
+                  <div key={request.id} className="flex items-start justify-between border-t border-slate-100 pt-3 first:border-0 first:pt-0">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">
+                        {request.user.firstName} {request.user.lastName}{" "}
+                        <span className="text-xs font-normal text-slate-400">
+                          #{request.user.badgeNumber}
+                        </span>
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {request.requestedDates
+                          .map((d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" }))
+                          .join(", ")}
+                      </p>
+                      {request.note && <p className="text-xs text-slate-400">{request.note}</p>}
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${priorityBadgeClassName(
+                        request.priorityGroup?.rank
+                      )}`}
+                    >
+                      {request.priorityGroup?.name ?? "No priority group"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section className="mt-10">

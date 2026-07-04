@@ -240,3 +240,89 @@ export async function reviewTimeOffRequest(
     }
   });
 }
+
+/** Toggle whether a schedule period is open for workers to submit their
+ * requested days — independent of the DRAFT/PUBLISHED status, which governs
+ * the actual built shift schedule, not the request-taking phase. */
+export async function setScheduleRequestWindow(schedulePeriodId: string, open: boolean) {
+  const user = await requireRole("MANAGER", "ADMIN");
+
+  const period = await prisma.schedulePeriod.findUnique({ where: { id: schedulePeriodId } });
+  if (!period) throw new Error("Schedule period not found");
+
+  const allowedUnitIds = scopedUnitIds(user);
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(period.unitId)) {
+    throw new Error(`Unit ${period.unitId} is not in the current manager's scope`);
+  }
+
+  await prisma.schedulePeriod.update({
+    where: { id: schedulePeriodId },
+    data: { requestsOpen: open },
+  });
+}
+
+/** Submitted schedule requests for a period, worker's priority group
+ * attached so the manager's review view can label/highlight by tier. */
+export async function getScheduleRequestsForPeriod(schedulePeriodId: string) {
+  const period = await prisma.schedulePeriod.findUnique({ where: { id: schedulePeriodId } });
+  if (!period) throw new Error("Schedule period not found");
+  await assertUnitInScope(period.unitId);
+
+  const requests = await prisma.scheduleRequest.findMany({
+    where: { schedulePeriodId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          badgeNumber: true,
+          unitMemberships: {
+            where: { unitId: period.unitId },
+            select: { priorityGroup: { select: { id: true, name: true, rank: true } } },
+          },
+        },
+      },
+    },
+    orderBy: { submittedAt: "asc" },
+  });
+
+  // Soonest-priority (lowest rank) first, unranked last — matches how a
+  // manager actually works down the list when building the schedule.
+  return requests
+    .map((r) => ({
+      ...r,
+      priorityGroup: r.user.unitMemberships[0]?.priorityGroup ?? null,
+    }))
+    .sort((a, b) => (a.priorityGroup?.rank ?? Infinity) - (b.priorityGroup?.rank ?? Infinity));
+}
+
+/** Manager "releases" a new 6-week schedule period for workers to submit
+ * requested days into — creates the period (DRAFT, not yet built/published)
+ * with requestsOpen already true, so there's one action instead of two. */
+export async function createScheduleRequestWindow(unitId: string, startDate: string) {
+  const user = await requireRole("MANAGER", "ADMIN");
+  const allowedUnitIds = scopedUnitIds(user);
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(unitId)) {
+    throw new Error(`Unit ${unitId} is not in the current manager's scope`);
+  }
+
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
+    ? new Date(`${startDate}T00:00:00`)
+    : new Date(startDate);
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Enter a valid start date.");
+  }
+  const end = new Date(start.getTime() + 42 * 24 * 60 * 60 * 1000); // 6 weeks
+
+  const existing = await prisma.schedulePeriod.findUnique({
+    where: { unitId_startDate_endDate: { unitId, startDate: start, endDate: end } },
+  });
+  if (existing) {
+    throw new Error("A schedule period for that exact 6-week span already exists.");
+  }
+
+  return prisma.schedulePeriod.create({
+    data: { unitId, startDate: start, endDate: end, status: "DRAFT", requestsOpen: true },
+  });
+}

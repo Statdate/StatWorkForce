@@ -188,6 +188,7 @@ model User {
   publishedSchedulePeriods    SchedulePeriod[]      @relation("PublishedBy")
   timeOffRequests             TimeOffRequest[]      @relation("TimeOffRequester")
   reviewedTimeOffRequests     TimeOffRequest[]       @relation("TimeOffReviewer")
+  scheduleRequests            ScheduleRequest[]
 
   @@unique([hospitalId, badgeNumber])
 }
@@ -251,12 +252,35 @@ model SchedulePeriod {
   publishedAt   DateTime?
   publishedById String?
   publishedBy   User?                @relation("PublishedBy", fields: [publishedById], references: [id])
+  // Independent of status/publish: the manager "releases" a period (typically
+  // a 6-week span) so workers can submit their requested days — separate
+  // from actually building/publishing the shift schedule.
+  requestsOpen  Boolean              @default(false)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
 
-  shifts Shift[]
+  shifts           Shift[]
+  scheduleRequests ScheduleRequest[]
 
   @@unique([unitId, startDate, endDate])
+}
+
+// A worker's requested days for a released (requestsOpen) schedule period.
+// One row per (period, worker) — resubmitting while the window is open just
+// updates it. Not tied to specific Shift records: this is a preference the
+// manager reviews when building the actual schedule, not a shift sign-up.
+model ScheduleRequest {
+  id               String         @id @default(cuid())
+  schedulePeriodId String
+  schedulePeriod   SchedulePeriod @relation(fields: [schedulePeriodId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedDates   DateTime[]
+  note             String?
+  submittedAt      DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([schedulePeriodId, userId])
 }
 
 model Shift {

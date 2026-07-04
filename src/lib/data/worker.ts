@@ -358,3 +358,64 @@ export async function withdrawTimeOffRequestForUser(userId: string, requestId: s
     throw new Error("Request not found or already reviewed");
   }
 }
+
+/** Released (requestsOpen) periods for the worker's unit(s), each with the
+ * worker's own submission attached (or null) so the UI can prefill an
+ * edit instead of always starting blank. */
+export async function getOpenScheduleRequestWindows() {
+  const user = await getCurrentUser();
+  return getOpenScheduleRequestWindowsForUser(user);
+}
+
+export async function getOpenScheduleRequestWindowsForUser(user: CurrentUser) {
+  const unitIds = scopedUnitIds(user) ?? [];
+  if (unitIds.length === 0) return [];
+
+  const periods = await prisma.schedulePeriod.findMany({
+    where: { unitId: { in: unitIds }, requestsOpen: true },
+    include: {
+      unit: { select: { name: true } },
+      scheduleRequests: { where: { userId: user.id } },
+    },
+    orderBy: { startDate: "asc" },
+  });
+
+  return periods.map((period) => ({
+    ...period,
+    myRequest: period.scheduleRequests[0] ?? null,
+  }));
+}
+
+export type SubmitScheduleRequestInput = {
+  schedulePeriodId: string;
+  requestedDates: string[];
+  note?: string | null;
+};
+
+export async function submitMyScheduleRequest(input: SubmitScheduleRequestInput) {
+  const user = await getCurrentUser();
+  return submitScheduleRequestForUser(user.id, input);
+}
+
+export async function submitScheduleRequestForUser(userId: string, input: SubmitScheduleRequestInput) {
+  const period = await prisma.schedulePeriod.findUnique({ where: { id: input.schedulePeriodId } });
+  if (!period) throw new Error("Schedule period not found");
+  if (!period.requestsOpen) throw new Error("This period isn't open for requests right now.");
+
+  const dates = input.requestedDates.map((raw) => {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00`) : new Date(raw);
+    if (Number.isNaN(date.getTime())) throw new Error(`Invalid date: ${raw}`);
+    return date;
+  });
+
+  return prisma.scheduleRequest.upsert({
+    where: { schedulePeriodId_userId: { schedulePeriodId: input.schedulePeriodId, userId } },
+    update: { requestedDates: dates, note: input.note?.trim() || null },
+    create: {
+      schedulePeriodId: input.schedulePeriodId,
+      userId,
+      requestedDates: dates,
+      note: input.note?.trim() || null,
+    },
+  });
+}
