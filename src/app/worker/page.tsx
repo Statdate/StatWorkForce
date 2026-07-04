@@ -3,6 +3,7 @@ import { getMySchedule, getOpenShifts } from "@/lib/data/worker";
 import { signUpForShiftAction } from "@/app/actions/schedule";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
+import { ScheduleCalendar } from "@/components/schedule-calendar";
 
 export default async function WorkerSchedulePage() {
   const [user, assignments, openShifts] = await Promise.all([
@@ -19,6 +20,17 @@ export default async function WorkerSchedulePage() {
       <p className="mt-1 text-sm text-slate-500">
         Upcoming shifts you&apos;re assigned to or have signed up for.
       </p>
+
+      <div className="mt-6">
+        <ScheduleCalendar
+          shifts={assignments.map((a) => ({
+            id: a.id,
+            startTime: a.shift.startTime,
+            endTime: a.shift.endTime,
+            unitName: a.shift.unit.name,
+          }))}
+        />
+      </div>
 
       <div className="mt-6 space-y-3">
         {assignments.map((assignment) => (

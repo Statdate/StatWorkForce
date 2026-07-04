@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ScheduleCalendar } from '@/components/schedule-calendar';
 import { Spacing } from '@/constants/theme';
 
 function formatRange(startTime: string, endTime: string) {
@@ -68,6 +69,16 @@ export default function ScheduleScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            <ScheduleCalendar
+              shifts={assignments.map((a) => ({
+                id: a.id,
+                startTime: a.shift.startTime,
+                endTime: a.shift.endTime,
+                unitName: a.shift.unit.name,
+              }))}
+            />
+          }
           renderSectionHeader={({ section }) => (
             <ThemedView type="background" style={styles.sectionHeader}>
               <ThemedText type="smallBold">{section.title}</ThemedText>
