@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { getItem, setItem, deleteItem } from "@/lib/storage";
 import { login as apiLogin, getMe, TOKEN_KEY } from "@/lib/api";
 import { registerForPushNotificationsAsync } from "@/lib/push-notifications";
+import { isBiometricEnabled, authenticateWithBiometrics } from "@/lib/biometric";
 
 type AuthUser = {
   id: string;
@@ -14,8 +15,14 @@ type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   isLoading: boolean;
+  // True when a stored session was restored on app launch and biometric lock
+  // is enabled — the (app) screens stay hidden behind a lock screen until
+  // unlock() succeeds. Never true right after a fresh signIn(): typing the
+  // password already proved identity for this app open.
+  isLocked: boolean;
   signIn: (badgeNumber: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  unlock: () => Promise<boolean>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -23,6 +30,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -31,6 +39,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const me = await getMe();
           setUser(me);
+          if (await isBiometricEnabled()) {
+            setIsLocked(true);
+          }
           registerForPushNotificationsAsync();
         } catch {
           await deleteItem(TOKEN_KEY);
@@ -45,16 +56,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setItem(TOKEN_KEY, token);
     const me = await getMe();
     setUser(me ?? { ...loggedInUser, badgeNumber });
+    setIsLocked(false);
     registerForPushNotificationsAsync();
   }
 
   async function signOut() {
     await deleteItem(TOKEN_KEY);
     setUser(null);
+    setIsLocked(false);
+  }
+
+  async function unlock() {
+    const success = await authenticateWithBiometrics('Unlock Stat Workforce');
+    if (success) setIsLocked(false);
+    return success;
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, isLocked, signIn, signOut, unlock }}>
       {children}
     </AuthContext.Provider>
   );

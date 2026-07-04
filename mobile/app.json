@@ -8,7 +8,10 @@
     "scheme": "statworkforce",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.anonymous.statworkforce"
+      "bundleIdentifier": "com.anonymous.statworkforce",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Stat Workforce uses Face ID to quickly and securely unlock the app."
+      }
     },
     "android": {
       "adaptiveIcon": {

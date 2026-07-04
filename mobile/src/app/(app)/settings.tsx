@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, RefreshControl, StyleSheet, Pressable, TextInput, Platform, Modal, FlatList } from 'react-native';
+import { ScrollView, RefreshControl, StyleSheet, Pressable, TextInput, Platform, Modal, FlatList, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSchedule, type ScheduleAssignment } from '@/lib/api';
 import { syncAssignmentsToCalendar, listWritableCalendars, CALENDAR_SYNC_SUPPORTED, type PickableCalendar } from '@/lib/calendar';
 import { getAlarmOffsetMinutes, setAlarmOffsetMinutes, getSelectedCalendar, setSelectedCalendar } from '@/lib/settings';
+import { isBiometricAvailable, isBiometricEnabled, setBiometricEnabled, authenticateWithBiometrics } from '@/lib/biometric';
 import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -15,6 +16,11 @@ export default function SettingsScreen() {
 
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+  const [isBiometricOn, setIsBiometricOn] = useState(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
+  const [isTogglingBiometric, setIsTogglingBiometric] = useState(false);
 
   const [alarmOffset, setAlarmOffsetState] = useState('60');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -34,6 +40,11 @@ export default function SettingsScreen() {
   }, [isWorker]);
 
   useEffect(() => {
+    isBiometricAvailable().then(setIsBiometricSupported);
+    isBiometricEnabled().then(setIsBiometricOn);
+  }, []);
+
+  useEffect(() => {
     if (!isWorker) return;
     load();
     getAlarmOffsetMinutes().then((minutes) => setAlarmOffsetState(String(minutes)));
@@ -49,6 +60,27 @@ export default function SettingsScreen() {
     setIsRefreshing(true);
     await load();
     setIsRefreshing(false);
+  }
+
+  async function handleToggleBiometric(next: boolean) {
+    setBiometricError(null);
+    setIsTogglingBiometric(true);
+    try {
+      if (next) {
+        // Confirm biometrics actually work on this device before persisting
+        // the setting — otherwise the user could lock themselves into a
+        // broken unlock screen on next launch.
+        const verified = await authenticateWithBiometrics('Confirm Face ID / Touch ID to enable app lock');
+        if (!verified) {
+          setBiometricError("Couldn't verify — app lock was not enabled.");
+          return;
+        }
+      }
+      await setBiometricEnabled(next);
+      setIsBiometricOn(next);
+    } finally {
+      setIsTogglingBiometric(false);
+    }
   }
 
   async function handleAlarmOffsetChange(value: string) {
@@ -104,18 +136,6 @@ export default function SettingsScreen() {
     setIsPickerVisible(false);
   }
 
-  if (!isWorker) {
-    return (
-      <ThemedView style={styles.container}>
-        <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
-          <ThemedText themeColor="textSecondary" style={styles.empty}>
-            No settings for your role yet.
-          </ThemedText>
-        </SafeAreaView>
-      </ThemedView>
-    );
-  }
-
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
@@ -123,51 +143,80 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
           <ThemedView type="backgroundElement" style={styles.syncCard}>
-            <ThemedText type="smallBold">Calendar sync</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Adds your published shifts to your phone calendar with a reminder before each one.
-            </ThemedText>
-            <ThemedView style={styles.offsetRow}>
-              <ThemedText type="small">Remind me</ThemedText>
-              <TextInput
-                value={alarmOffset}
-                onChangeText={handleAlarmOffsetChange}
-                keyboardType="number-pad"
-                style={styles.offsetInput}
-              />
-              <ThemedText type="small">minutes before each shift</ThemedText>
-            </ThemedView>
-            {CALENDAR_SYNC_SUPPORTED && (
-              <ThemedView style={styles.offsetRow}>
-                <ThemedText type="small">Calendar</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.calendarLabel}>
-                  {calendarLabel}
-                </ThemedText>
-                <Pressable onPress={handleOpenCalendarPicker}>
-                  <ThemedText type="linkPrimary">Change</ThemedText>
-                </Pressable>
-              </ThemedView>
-            )}
-            {CALENDAR_SYNC_SUPPORTED ? (
-              <Pressable
-                onPress={handleSync}
-                disabled={isSyncing}
-                style={[styles.actionButton, styles.signUpButton, styles.syncButton]}>
-                <ThemedText type="small" style={styles.signUpText}>
-                  {isSyncing ? 'Syncing…' : 'Sync to Calendar'}
-                </ThemedText>
-              </Pressable>
+            <ThemedText type="smallBold">Security</ThemedText>
+            {isBiometricSupported ? (
+              <>
+                <ThemedView style={styles.offsetRow}>
+                  <ThemedText type="small" style={styles.flexShrink}>
+                    Require Face ID / Touch ID to open the app
+                  </ThemedText>
+                  <Switch
+                    value={isBiometricOn}
+                    onValueChange={handleToggleBiometric}
+                    disabled={isTogglingBiometric}
+                  />
+                </ThemedView>
+                {biometricError && (
+                  <ThemedText type="small" style={styles.errorText}>
+                    {biometricError}
+                  </ThemedText>
+                )}
+              </>
             ) : (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.webNotice}>
-                Calendar sync requires the native app (not available in the web preview).
-              </ThemedText>
-            )}
-            {syncMessage && (
               <ThemedText type="small" themeColor="textSecondary">
-                {syncMessage}
+                No Face ID / Touch ID enrolled on this device.
               </ThemedText>
             )}
           </ThemedView>
+
+          {isWorker && (
+            <ThemedView type="backgroundElement" style={styles.syncCard}>
+              <ThemedText type="smallBold">Calendar sync</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Adds your published shifts to your phone calendar with a reminder before each one.
+              </ThemedText>
+              <ThemedView style={styles.offsetRow}>
+                <ThemedText type="small">Remind me</ThemedText>
+                <TextInput
+                  value={alarmOffset}
+                  onChangeText={handleAlarmOffsetChange}
+                  keyboardType="number-pad"
+                  style={styles.offsetInput}
+                />
+                <ThemedText type="small">minutes before each shift</ThemedText>
+              </ThemedView>
+              {CALENDAR_SYNC_SUPPORTED && (
+                <ThemedView style={styles.offsetRow}>
+                  <ThemedText type="small">Calendar</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.calendarLabel}>
+                    {calendarLabel}
+                  </ThemedText>
+                  <Pressable onPress={handleOpenCalendarPicker}>
+                    <ThemedText type="linkPrimary">Change</ThemedText>
+                  </Pressable>
+                </ThemedView>
+              )}
+              {CALENDAR_SYNC_SUPPORTED ? (
+                <Pressable
+                  onPress={handleSync}
+                  disabled={isSyncing}
+                  style={[styles.actionButton, styles.signUpButton, styles.syncButton]}>
+                  <ThemedText type="small" style={styles.signUpText}>
+                    {isSyncing ? 'Syncing…' : 'Sync to Calendar'}
+                  </ThemedText>
+                </Pressable>
+              ) : (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.webNotice}>
+                  Calendar sync requires the native app (not available in the web preview).
+                </ThemedText>
+              )}
+              {syncMessage && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {syncMessage}
+                </ThemedText>
+              )}
+            </ThemedView>
+          )}
         </ScrollView>
       </SafeAreaView>
       <Modal
@@ -221,8 +270,9 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
-  list: { padding: Spacing.three, gap: Spacing.two },
+  list: { padding: Spacing.three, gap: Spacing.three },
   empty: { textAlign: 'center', marginTop: Spacing.six },
+  flexShrink: { flexShrink: 1 },
   actionButton: { alignSelf: 'flex-start', marginTop: Spacing.one },
   errorText: { color: '#dc2626' },
   signUpButton: {
