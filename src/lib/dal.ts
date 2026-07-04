@@ -34,6 +34,7 @@ const CURRENT_USER_SELECT = {
   lastName: true,
   email: true,
   isActive: true,
+  hospital: { select: { name: true } },
   jobType: { select: { id: true, name: true } },
   unitMemberships: {
     select: {

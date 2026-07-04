@@ -45,14 +45,18 @@ export function login(badgeNumber: string, password: string) {
   });
 }
 
+export type MeResponse = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  accountType: string;
+  badgeNumber: string;
+  hospitalName: string;
+  units: { id: string; name: string; type: string }[];
+};
+
 export function getMe() {
-  return request<{
-    id: string;
-    firstName: string;
-    lastName: string;
-    accountType: string;
-    badgeNumber: string;
-  }>("/api/me");
+  return request<MeResponse>("/api/me");
 }
 
 export type ScheduleAssignment = {

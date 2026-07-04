@@ -14,6 +14,7 @@ export async function GET() {
     accountType: user.accountType,
     badgeNumber: user.badgeNumber,
     jobType: user.jobType,
+    hospitalName: user.hospital.name,
     units: user.unitMemberships.map((m) => m.unit),
   });
 }

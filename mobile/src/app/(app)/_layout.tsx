@@ -1,7 +1,9 @@
 import { Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
+import { HospitalBanner } from '@/components/hospital-banner';
 
 function SignOutButton() {
   const { signOut } = useAuth();
@@ -13,14 +15,28 @@ function SignOutButton() {
 }
 
 export default function AppTabsLayout() {
+  const { user } = useAuth();
+  const isWorker = user?.accountType === 'WORKER';
+
   return (
-    <Tabs screenOptions={{ headerRight: () => <SignOutButton /> }}>
-      <Tabs.Screen name="index" options={{ title: 'My Schedule' }} />
-      <Tabs.Screen name="time-off" options={{ title: 'Time Off' }} />
-      <Tabs.Screen name="credentials" options={{ title: 'My Credentials' }} />
-      <Tabs.Screen name="messages" options={{ title: 'Messages', headerShown: false }} />
-      <Tabs.Screen name="notifications" options={{ title: 'Alerts' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
-    </Tabs>
+    <View style={styles.flex}>
+      {isWorker && (
+        <SafeAreaView edges={['top']}>
+          <HospitalBanner />
+        </SafeAreaView>
+      )}
+      <Tabs screenOptions={{ headerRight: () => <SignOutButton /> }}>
+        <Tabs.Screen name="index" options={{ title: 'My Schedule' }} />
+        <Tabs.Screen name="time-off" options={{ title: 'Time Off' }} />
+        <Tabs.Screen name="credentials" options={{ title: 'My Credentials' }} />
+        <Tabs.Screen name="messages" options={{ title: 'Messages', headerShown: false }} />
+        <Tabs.Screen name="notifications" options={{ title: 'Alerts' }} />
+        <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      </Tabs>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+});

@@ -10,6 +10,11 @@ type AuthUser = {
   lastName: string;
   accountType: string;
   badgeNumber: string;
+  // Optional: absent in the rare fallback path where a fresh login's
+  // follow-up getMe() call fails and we fall back to the login response
+  // alone, which doesn't carry these.
+  hospitalName?: string;
+  units?: { id: string; name: string; type: string }[];
 };
 
 type AuthContextValue = {
