@@ -92,14 +92,16 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
 
 All seeded users share the password `Password123!`.
 
-| Role    | Badge number | Notes                          |
-| ------- | ------------ | ------------------------------- |
-| Admin   | `10001`      | Sees the whole hospital          |
-| Manager | `20001`      | Scoped to the ICU unit           |
-| Worker  | `30001`      | ICU, has an expired BLS cert     |
-| Worker  | `30002`      | ICU                              |
-| Worker  | `30003`      | ICU, reported the sample call-in |
-| Worker  | `30004`      | Emergency Department (different unit — proves manager scoping) |
+| Role            | Badge number | Notes                          |
+| --------------- | ------------ | ------------------------------- |
+| Admin           | `10001`      | Kaiser — sees the whole hospital |
+| Manager         | `20001`      | Angela Allen — scoped to the ICU unit |
+| Asst. manager   | `20002`      | Brian Yu — ICU |
+| Asst. manager   | `20003`      | Elline Williams — ICU |
+| Worker          | `30001`      | Jamie Nurse — ICU, has an expired BLS cert |
+| Worker          | `30002`      | ICU                              |
+| Worker          | `30003`      | ICU, reported the sample call-in |
+| Worker          | `30004`      | Emergency Department (different unit — proves manager scoping) |
 
 ### Other scripts
 
@@ -513,3 +515,64 @@ means the device itself, not your dev machine.
   chain — token registration, the sweep, the Expo API call shape — is now
   proven end-to-end on a real device; APNs credentials are the only gap
   left.
+
+## Later additions: biometric lock, scheduling requests, credential preview
+
+- **Real staff names.** The seeded manager (`20001`) is Angela Allen; two
+  assistant managers were added, Brian Yu (`20002`) and Elline Williams
+  (`20003`), same ICU unit and manager permissions; the admin (`10001`) is
+  Kaiser. A one-time `CRON_SECRET`-gated route
+  (`/api/admin/sync-seed-identities`) applies the same rename to the already-
+  deployed production database, since re-running the seed script isn't safe
+  against live data.
+- **Biometric (Face ID / Touch ID) lock — mobile only.** `expo-local-
+  authentication` gates the app behind a lock screen after the token is
+  restored from storage, if the user opted in from Settings. Code-complete
+  and the native module compiled/installed cleanly in an `expo prebuild`;
+  the actual Face ID prompt succeeding is native-only behavior that couldn't
+  be hand-verified in this environment (no Simulator GUI access here) —
+  Anthony should confirm on a real device or the Simulator.
+- **Hospital + unit banner — mobile, worker accounts only.** `GET /api/me`
+  now returns `hospitalName` and the worker's unit names; a banner renders
+  above the tab bar for workers (not shown to manager/admin accounts, since
+  they aren't scoped to a single unit the same way). Verified via the API
+  response shape; the mobile banner component typechecks and reuses the
+  same `useAuth()` data workers already had.
+- **Time off hours dropdown.** `TimeOffRequest.hours` (int, 2–999, default 8)
+  captures a total-hours-for-the-request figure alongside the existing date
+  range; both web and mobile show a chip-style selector
+  (2/4/6/8/10/12/16/24). Verified via the browser (web) and `POST
+  /api/timeoff` (mobile API contract).
+- **Credential document preview.** Workers (and managers/admins viewing a
+  worker's file) can preview an already-uploaded credential document inline
+  instead of only downloading it — a modal with an `<img>`/`<iframe>` on
+  web, and `expo-web-browser`'s in-app browser rendering a `data:` URI on
+  mobile (avoids adding a native PDF-rendering dependency, since WebKit
+  renders PDF/image data URIs natively). The credential type dropdown's
+  catch-all option was relabeled "Custom / Other". Verified visually in the
+  browser for web; mobile is code-complete and typechecks, not hand-tested
+  in the Simulator.
+- **Calendar view of the schedule.** A hand-built month-grid calendar
+  (no calendar library) shows a worker's shifts by day, with separate
+  parallel implementations for web (`src/components/schedule-calendar.tsx`)
+  and mobile (`mobile/src/components/schedule-calendar.tsx`). Verified
+  visually and interactively (month navigation) in the browser for web.
+- **6-week schedule request windows + priority-group labeling.** Managers
+  release a 6-week period per unit (`createScheduleRequestWindow` — sets
+  `SchedulePeriod.requestsOpen = true`, `endDate = startDate + 42 days`).
+  While open, any worker can tap requested days on a calendar picker and
+  submit (`ScheduleRequest`, one row per worker per period, resubmitting
+  overwrites); anyone can request any day — there's no tier-based lockout —
+  but the manager's review list shows each submission's priority-group tier
+  so higher-priority requests can be favored when actually building the
+  shift schedule. Verified fully end-to-end in the browser: released a
+  period as manager Angela Allen (confirmed the 42-day span computed
+  correctly), submitted 3 requested days + a note as worker Jamie Nurse,
+  confirmed the manager's view showed the submission with the correct
+  "Tier 1 — Full-time" badge matching her roster entry, and confirmed
+  **Close requests** correctly stops it from showing as an open window on
+  the worker side.
+- **Calendar sync moved into Settings — mobile.** Previously lived on the
+  My Schedule tab; now it's under a dedicated Settings tab alongside the
+  biometric-lock toggle, and is still restricted to worker accounts (not
+  shown for manager/admin, since sync targets an individual's own shifts).
