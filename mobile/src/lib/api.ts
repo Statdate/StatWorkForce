@@ -1,3 +1,4 @@
+import { fromByteArray } from "base64-js";
 import { getItem } from "@/lib/storage";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -78,6 +79,33 @@ export function getSchedule() {
   return request<{ assignments: ScheduleAssignment[] }>("/api/schedule");
 }
 
+export type CredentialType =
+  | "RN_LICENSE"
+  | "LPN_LICENSE"
+  | "ACLS"
+  | "BLS"
+  | "PALS"
+  | "NIHSS"
+  | "CCRN"
+  | "CMC"
+  | "ADVANCED_DEGREE"
+  | "OTHER";
+
+// Mirrors src/lib/credential-types.ts's CREDENTIAL_TYPE_LABELS — kept in
+// sync by hand since the mobile app can't import server-only Prisma types.
+export const CREDENTIAL_TYPE_OPTIONS: { value: CredentialType; label: string }[] = [
+  { value: "RN_LICENSE", label: "RN License (Nursing)" },
+  { value: "LPN_LICENSE", label: "LPN License (Nursing)" },
+  { value: "ACLS", label: "ACLS" },
+  { value: "BLS", label: "BLS" },
+  { value: "PALS", label: "PALS" },
+  { value: "NIHSS", label: "NIHSS" },
+  { value: "CCRN", label: "CCRN" },
+  { value: "CMC", label: "CMC" },
+  { value: "ADVANCED_DEGREE", label: "Advanced Degree" },
+  { value: "OTHER", label: "Custom / Other" },
+];
+
 export type Credential = {
   id: string;
   type: string;
@@ -90,6 +118,41 @@ export type Credential = {
 
 export function getCredentials() {
   return request<{ credentials: Credential[] }>("/api/credentials");
+}
+
+export async function addCredential(input: {
+  type: CredentialType;
+  customName?: string;
+  issuingBody?: string;
+  credentialNumber?: string;
+  expirationDate: string;
+  file?: { uri: string; name: string; mimeType: string };
+}) {
+  const token = await getItem(TOKEN_KEY);
+  const form = new FormData();
+  form.append("type", input.type);
+  if (input.customName) form.append("customName", input.customName);
+  if (input.issuingBody) form.append("issuingBody", input.issuingBody);
+  if (input.credentialNumber) form.append("credentialNumber", input.credentialNumber);
+  form.append("expirationDate", input.expirationDate);
+  if (input.file) {
+    form.append("file", {
+      uri: input.file.uri,
+      name: input.file.name,
+      type: input.file.mimeType,
+    } as unknown as Blob);
+  }
+
+  const response = await fetch(`${API_URL}/api/credentials`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new ApiError(body?.error ?? "Could not add credential", response.status);
+  }
+  return body as { credential: Credential };
 }
 
 /** Separate from request(): multipart needs fetch to set the Content-Type
@@ -136,13 +199,16 @@ export async function getCredentialFileDataUri(credentialId: string): Promise<st
     const body = await response.json().catch(() => ({}));
     throw new ApiError(body?.error ?? "Could not load document", response.status);
   }
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read document"));
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(blob);
-  });
+  const mimeType = response.headers.get("content-type") ?? "application/octet-stream";
+  // React Native's Blob implementation can't wrap a raw ArrayBuffer/
+  // ArrayBufferView ("Creating blobs from 'ArrayBuffer' and
+  // 'ArrayBufferView' are not supported") — the usual response.blob() +
+  // FileReader.readAsDataURL() approach throws on-device even though it
+  // works fine in a browser. Reading the response as an ArrayBuffer and
+  // base64-encoding it directly (via the same base64-js helper React
+  // Native's own internals use) sidesteps RN's Blob path entirely.
+  const buffer = await response.arrayBuffer();
+  return `data:${mimeType};base64,${fromByteArray(new Uint8Array(buffer))}`;
 }
 
 export type OpenShift = {

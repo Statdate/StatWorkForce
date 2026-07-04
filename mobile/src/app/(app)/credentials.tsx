@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import {
   getCredentials,
+  addCredential,
   uploadCredentialFile,
   getCredentialFileDataUri,
   ApiError,
+  CREDENTIAL_TYPE_OPTIONS,
   type Credential,
+  type CredentialType,
 } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateField } from '@/components/date-field';
 import { Spacing } from '@/constants/theme';
 
 const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
@@ -42,6 +46,15 @@ export default function CredentialsScreen() {
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<{ id: string; message: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [newType, setNewType] = useState<CredentialType | ''>('');
+  const [newCustomName, setNewCustomName] = useState('');
+  const [newIssuingBody, setNewIssuingBody] = useState('');
+  const [newCredentialNumber, setNewCredentialNumber] = useState('');
+  const [newExpirationDate, setNewExpirationDate] = useState('');
+  const [newFile, setNewFile] = useState<{ uri: string; name: string; mimeType: string } | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -87,6 +100,40 @@ export default function CredentialsScreen() {
     }
   }
 
+  async function handlePickNewFile() {
+    const result = await DocumentPicker.getDocumentAsync({ type: PICKABLE_MIME_TYPES });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setNewFile({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType ?? 'application/octet-stream' });
+  }
+
+  async function handleAddCredential() {
+    if (!newType) return;
+    setAddError(null);
+    setIsAdding(true);
+    try {
+      await addCredential({
+        type: newType,
+        customName: newCustomName || undefined,
+        issuingBody: newIssuingBody || undefined,
+        credentialNumber: newCredentialNumber || undefined,
+        expirationDate: newExpirationDate,
+        file: newFile ?? undefined,
+      });
+      setNewType('');
+      setNewCustomName('');
+      setNewIssuingBody('');
+      setNewCredentialNumber('');
+      setNewExpirationDate('');
+      setNewFile(null);
+      await load();
+    } catch (error) {
+      setAddError(error instanceof ApiError ? error.message : 'Could not add credential.');
+    } finally {
+      setIsAdding(false);
+    }
+  }
+
   async function handlePreview(credentialId: string) {
     setPreviewError(null);
     setPreviewingId(credentialId);
@@ -112,22 +159,102 @@ export default function CredentialsScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
-            loadError ? (
-              <ThemedView type="backgroundElement" style={styles.errorCard}>
-                <ThemedText style={styles.errorText} accessibilityRole="alert">
-                  {loadError}
+            <>
+              {loadError && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText} accessibilityRole="alert">
+                    {loadError}
+                  </ThemedText>
+                  <Pressable
+                    onPress={load}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry"
+                    style={styles.retryButton}>
+                    <ThemedText type="small" style={styles.previewText}>
+                      Retry
+                    </ThemedText>
+                  </Pressable>
+                </ThemedView>
+              )}
+              <ThemedView type="backgroundElement" style={styles.formCard}>
+                <ThemedText type="smallBold">Add a credential</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Pick what you&apos;re adding, set its expiration date, and attach the document.
                 </ThemedText>
+                <ThemedView style={styles.typeRow}>
+                  {CREDENTIAL_TYPE_OPTIONS.map((option) => (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => setNewType(option.value)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={option.label}
+                      accessibilityState={{ selected: newType === option.value }}
+                      style={[styles.typeChip, newType === option.value && styles.typeChipActive]}>
+                      <ThemedText
+                        type="small"
+                        style={newType === option.value ? styles.typeChipTextActive : undefined}>
+                        {option.label}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                </ThemedView>
+                {newType === 'OTHER' && (
+                  <TextInput
+                    value={newCustomName}
+                    onChangeText={setNewCustomName}
+                    placeholder="Name the certification (required for Custom/Other)"
+                    accessibilityLabel="Certification name, required for Custom/Other"
+                    style={styles.input}
+                  />
+                )}
+                <TextInput
+                  value={newIssuingBody}
+                  onChangeText={setNewIssuingBody}
+                  placeholder="Issuing body (optional)"
+                  accessibilityLabel="Issuing body, optional"
+                  style={styles.input}
+                />
+                <TextInput
+                  value={newCredentialNumber}
+                  onChangeText={setNewCredentialNumber}
+                  placeholder="Credential / license number (optional)"
+                  accessibilityLabel="Credential number, optional"
+                  style={styles.input}
+                />
+                <ThemedText type="small">Expiration date (pick or type YYYY-MM-DD)</ThemedText>
+                <DateField
+                  label="expiration date"
+                  value={newExpirationDate}
+                  onChange={setNewExpirationDate}
+                  accessibilityLabel="Expiration date, year-month-day"
+                />
                 <Pressable
-                  onPress={load}
+                  onPress={handlePickNewFile}
                   accessibilityRole="button"
-                  accessibilityLabel="Retry"
-                  style={styles.retryButton}>
+                  accessibilityLabel={newFile ? `Document selected: ${newFile.name}` : 'Attach document, optional'}
+                  style={styles.attachButton}>
                   <ThemedText type="small" style={styles.previewText}>
-                    Retry
+                    {newFile ? `Document: ${newFile.name}` : 'Attach document (optional)'}
                   </ThemedText>
                 </Pressable>
+                <Pressable
+                  onPress={handleAddCredential}
+                  disabled={isAdding || !newType || !newExpirationDate}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add credential"
+                  accessibilityState={{ disabled: isAdding || !newType || !newExpirationDate }}
+                  style={styles.uploadButton}>
+                  <ThemedText type="small" style={styles.uploadText}>
+                    {isAdding ? 'Adding…' : 'Add credential'}
+                  </ThemedText>
+                </Pressable>
+                {addError && (
+                  <ThemedText type="small" style={styles.errorText} accessibilityRole="alert">
+                    {addError}
+                  </ThemedText>
+                )}
               </ThemedView>
-            ) : null
+            </>
           }
           ListEmptyComponent={
             !isLoading && !loadError ? (
@@ -243,4 +370,35 @@ const styles = StyleSheet.create({
   errorText: { color: '#dc2626' },
   errorCard: { borderRadius: Spacing.two, padding: Spacing.three, gap: Spacing.one, marginBottom: Spacing.two },
   retryButton: { alignSelf: 'flex-start' },
+  formCard: {
+    borderRadius: Spacing.two,
+    padding: Spacing.three,
+    gap: Spacing.one,
+    marginBottom: Spacing.three,
+  },
+  typeRow: { flexDirection: 'row', gap: Spacing.one, flexWrap: 'wrap', marginVertical: Spacing.one },
+  typeChip: {
+    backgroundColor: '#e2e8f0',
+    borderRadius: 999,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
+  },
+  typeChipActive: { backgroundColor: '#0f172a' },
+  typeChipTextActive: { color: '#fff' },
+  input: {
+    backgroundColor: '#fff',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 8,
+    marginBottom: Spacing.one,
+  },
+  attachButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#0f172a',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    marginBottom: Spacing.one,
+  },
 });

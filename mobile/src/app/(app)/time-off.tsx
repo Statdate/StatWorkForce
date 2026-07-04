@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, TextInput } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   getTimeOffRequests,
   requestTimeOff,
@@ -13,6 +12,7 @@ import {
 } from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DateField } from '@/components/date-field';
 import { Spacing } from '@/constants/theme';
 
 const TYPE_OPTIONS: { value: TimeOffRequestType; label: string }[] = [
@@ -21,69 +21,6 @@ const TYPE_OPTIONS: { value: TimeOffRequestType; label: string }[] = [
   { value: 'LIFE_BALANCE', label: 'Life Balance' },
   { value: 'OTHER', label: 'Other' },
 ];
-
-function dateKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-// expo-calendar-picker equivalent for date fields: a native calendar popup
-// is the primary way to pick a date, but the underlying TextInput stays
-// editable too — some workers will always prefer typing YYYY-MM-DD directly.
-function DateField({
-  label,
-  value,
-  onChange,
-  accessibilityLabel,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  accessibilityLabel: string;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  return (
-    <ThemedView style={dateFieldStyles.row}>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="2026-07-04"
-        accessibilityLabel={accessibilityLabel}
-        style={dateFieldStyles.input}
-      />
-      {Platform.OS !== 'web' && (
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Pick ${label} from calendar`}
-          style={dateFieldStyles.calendarButton}>
-          <ThemedText type="small" style={dateFieldStyles.calendarButtonText}>
-            📅
-          </ThemedText>
-        </Pressable>
-      )}
-      {pickerOpen && (
-        <DateTimePicker
-          value={value ? new Date(`${value}T00:00:00`) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={(event, selectedDate) => {
-            setPickerOpen(Platform.OS === 'ios');
-            if (event.type === 'set' && selectedDate) onChange(dateKey(selectedDate));
-            if (Platform.OS !== 'ios') setPickerOpen(false);
-          }}
-        />
-      )}
-    </ThemedView>
-  );
-}
-
-const dateFieldStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, backgroundColor: 'transparent' },
-  input: { flex: 1, backgroundColor: '#fff', borderRadius: Spacing.one, paddingHorizontal: Spacing.two, paddingVertical: 8 },
-  calendarButton: { paddingHorizontal: Spacing.two, paddingVertical: 8 },
-  calendarButtonText: { fontSize: 18 },
-});
 
 function statusStyle(status: TimeOffRequest['status']) {
   if (status === 'APPROVED') return { label: 'Approved', color: '#059669' };
