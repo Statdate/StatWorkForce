@@ -5,12 +5,14 @@ import {
   getManagerUnits,
   getUnitCensus,
   getApprovalQueue,
+  getPendingShiftPickups,
   getUnitStaff,
   getSchedulePeriods,
   getScheduleRequestsForPeriod,
 } from "@/lib/data/manager";
 import { approveTimeEntryAction, rejectTimeEntryAction } from "@/app/actions/timecards";
 import { publishSchedulePeriodAction } from "@/app/actions/schedulePeriods";
+import { approveShiftPickupAction, rejectShiftPickupAction } from "@/app/actions/schedule";
 import {
   createScheduleRequestWindowAction,
   closeScheduleRequestWindowAction,
@@ -43,10 +45,11 @@ export default async function ManagerUnitPage({
   const now = new Date();
   const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [user, shifts, approvalQueue, staff, schedulePeriods, { error }] = await Promise.all([
+  const [user, shifts, approvalQueue, pendingPickups, staff, schedulePeriods, { error }] = await Promise.all([
     getCurrentUser(),
     getUnitCensus(unitId, now, twoWeeksOut),
     getApprovalQueue(unitId),
+    getPendingShiftPickups(unitId),
     getUnitStaff(unitId),
     getSchedulePeriods(unitId),
     searchParams,
@@ -163,6 +166,68 @@ export default async function ManagerUnitPage({
               )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-medium text-slate-900">Pending shift pickups</h2>
+        <p className="text-xs text-slate-400">
+          Workers who&apos;ve self-scheduled onto an open shift — approve before it locks in, so
+          you can catch overtime before it happens.
+        </p>
+        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          {pendingPickups.length === 0 ? (
+            <p className="p-4 text-sm text-slate-500">Nothing pending.</p>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Worker</th>
+                  <th className="px-4 py-2">Shift</th>
+                  <th className="px-4 py-2">Role</th>
+                  <th className="px-4 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingPickups.map((pickup) => (
+                  <tr key={pickup.id} className="border-t border-slate-100">
+                    <td className="px-4 py-2">
+                      {pickup.user.firstName} {pickup.user.lastName} (#{pickup.user.badgeNumber})
+                    </td>
+                    <td className="px-4 py-2">
+                      {pickup.shift.startTime.toLocaleString()} –{" "}
+                      {pickup.shift.endTime.toLocaleTimeString()}
+                    </td>
+                    <td className="px-4 py-2">{pickup.shift.jobType.name}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex gap-3">
+                        <form action={approveShiftPickupAction}>
+                          <input type="hidden" name="assignmentId" value={pickup.id} />
+                          <input type="hidden" name="unitId" value={unitId} />
+                          <button
+                            type="submit"
+                            className="text-xs font-medium text-emerald-700 hover:text-emerald-900"
+                          >
+                            Approve
+                          </button>
+                        </form>
+                        <form action={rejectShiftPickupAction}>
+                          <input type="hidden" name="assignmentId" value={pickup.id} />
+                          <input type="hidden" name="unitId" value={unitId} />
+                          <button
+                            type="submit"
+                            className="text-xs font-medium text-red-600 hover:text-red-800"
+                          >
+                            Reject
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 

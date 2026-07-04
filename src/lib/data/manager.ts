@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireRole, scopedUnitIds } from "@/lib/dal";
+import { sendPushToUser } from "@/lib/push";
 
 class ForbiddenUnitError extends Error {
   constructor(unitId: string) {
@@ -101,6 +102,68 @@ export async function setTimeEntryApproval(
     where: { id: timeEntryId },
     data: { approvalStatus, approvedById: user.id, approvedAt: new Date() },
   });
+}
+
+/** Workers who've self-scheduled onto an open shift but haven't been approved
+ * yet — SELF_SCHEDULED already counts toward the shift's filled count (so no
+ * one else can also grab it), but a manager needs to sign off before it's
+ * final. This is what keeps a pickup from silently accruing overtime. */
+export async function getPendingShiftPickups(unitId: string) {
+  await assertUnitInScope(unitId);
+
+  return prisma.scheduleAssignment.findMany({
+    where: { status: "SELF_SCHEDULED", shift: { unitId } },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+      shift: { select: { startTime: true, endTime: true, jobType: { select: { name: true } } } },
+    },
+    orderBy: { signedUpAt: "asc" },
+  });
+}
+
+/** Approve or reject a pending shift pickup. Rejecting drops the assignment
+ * (AssignmentStatus.DROPPED) so the shift goes back to the open-shifts list
+ * instead of leaving a phantom "rejected" row blocking the slot. */
+export async function setShiftPickupApproval(assignmentId: string, decision: "APPROVED" | "DENIED") {
+  const user = await requireRole("MANAGER", "ADMIN");
+  const allowedUnitIds = scopedUnitIds(user);
+
+  const assignment = await prisma.scheduleAssignment.findUnique({
+    where: { id: assignmentId },
+    include: { shift: { select: { unitId: true, startTime: true, endTime: true } }, user: { select: { id: true } } },
+  });
+  if (!assignment) throw new Error("Shift pickup not found");
+  if (assignment.status !== "SELF_SCHEDULED") throw new Error("This pickup was already reviewed");
+
+  if (allowedUnitIds !== null && !allowedUnitIds.includes(assignment.shift.unitId)) {
+    throw new Error(`Unit ${assignment.shift.unitId} is not in the current manager's scope`);
+  }
+
+  await prisma.scheduleAssignment.update({
+    where: { id: assignmentId },
+    data:
+      decision === "APPROVED"
+        ? { status: "APPROVED", approvedById: user.id, approvedAt: new Date() }
+        : { status: "DROPPED" },
+  });
+
+  const shiftDate = assignment.shift.startTime.toLocaleDateString();
+  const title =
+    decision === "APPROVED"
+      ? `Your shift pickup for ${shiftDate} was approved`
+      : `Your shift pickup for ${shiftDate} was not approved`;
+  await prisma.notification.create({
+    data: {
+      userId: assignment.user.id,
+      type: "SHIFT_PICKUP_DECIDED",
+      title,
+      body:
+        decision === "DENIED"
+          ? "The shift is back in Open Shifts for someone else to pick up."
+          : null,
+    },
+  });
+  await sendPushToUser(assignment.user.id, title, decision === "DENIED" ? "Check Open Shifts for other options." : "");
 }
 
 /** Schedule periods for a unit, most recent first — the draft/published gate

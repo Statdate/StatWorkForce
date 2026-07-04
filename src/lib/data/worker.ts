@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 import { CredentialType, TimeOffType } from "@/generated/prisma/enums";
+import { sendPushToUser } from "@/lib/push";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -87,6 +88,21 @@ export async function signUpForShiftAsUser(user: CurrentUser, shiftId: string) {
     update: { status: "SELF_SCHEDULED" },
     create: { shiftId, userId: user.id, status: "SELF_SCHEDULED" },
   });
+
+  // SELF_SCHEDULED is a pending pickup, not a final one — notify the unit's
+  // managers so they can approve/reject before it risks accruing overtime.
+  const managers = await prisma.user.findMany({
+    where: { accountType: "MANAGER", isActive: true, unitMemberships: { some: { unitId: shift.unitId } } },
+    select: { id: true },
+  });
+  const title = `${user.firstName} ${user.lastName} wants to pick up a shift`;
+  const body = `${shift.startTime.toLocaleString()} – ${shift.endTime.toLocaleTimeString()}. Review it in the schedule.`;
+  for (const manager of managers) {
+    await prisma.notification.create({
+      data: { userId: manager.id, type: "SHIFT_PICKUP_REQUESTED", title, body },
+    });
+    await sendPushToUser(manager.id, title, body);
+  }
 }
 
 export async function getMyCredentials() {

@@ -18,6 +18,23 @@ function errorMessage(e: unknown) {
   return e instanceof ApiError ? e.message : 'Something went wrong. Try again.';
 }
 
+// SELF_SCHEDULED now means "picked up, pending manager approval" rather than
+// a final state — mirrors src/lib/schedule-types.ts on the web side.
+function assignmentStatusLabel(status: string) {
+  switch (status) {
+    case 'SELF_SCHEDULED':
+      return 'Pending manager approval';
+    case 'APPROVED':
+      return 'Approved';
+    case 'MANAGER_ASSIGNED':
+      return 'Assigned';
+    case 'DROPPED':
+      return 'Dropped';
+    default:
+      return status.replaceAll('_', ' ').toLowerCase();
+  }
+}
+
 function formatRange(startTime: string, endTime: string) {
   const start = new Date(startTime);
   const end = new Date(endTime);
@@ -151,8 +168,7 @@ export default function ScheduleScreen() {
                     {formatRange(assignment.shift.startTime, assignment.shift.endTime)}
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {assignment.shift.jobType.name} ·{' '}
-                    {assignment.status.replaceAll('_', ' ').toLowerCase()}
+                    {assignment.shift.jobType.name} · {assignmentStatusLabel(assignment.status)}
                   </ThemedText>
                 </ThemedView>
               );

@@ -6,6 +6,7 @@ import { WorkerNav } from "@/components/worker-nav";
 import { ScheduleCalendar } from "@/components/schedule-calendar";
 import { RequestDaysPicker } from "@/components/request-days-picker";
 import { ActionErrorBanner } from "@/components/action-error-banner";
+import { assignmentStatusLabel } from "@/lib/schedule-types";
 
 export default async function WorkerSchedulePage({
   searchParams,
@@ -59,7 +60,7 @@ export default async function WorkerSchedulePage({
               <p className="text-xs text-slate-400">{assignment.shift.jobType.name}</p>
             </div>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-              {assignment.status.replaceAll("_", " ").toLowerCase()}
+              {assignmentStatusLabel(assignment.status)}
             </span>
           </div>
         ))}
