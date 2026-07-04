@@ -1,6 +1,6 @@
 import { getCurrentUser } from "@/lib/dal";
 import { getMySchedule, getOpenShifts } from "@/lib/data/worker";
-import { signUpForShiftAction, dropShiftAction } from "@/app/actions/schedule";
+import { signUpForShiftAction } from "@/app/actions/schedule";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 
@@ -34,22 +34,9 @@ export default async function WorkerSchedulePage() {
               </p>
               <p className="text-xs text-slate-400">{assignment.shift.jobType.name}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                {assignment.status.replaceAll("_", " ").toLowerCase()}
-              </span>
-              {assignment.status === "SELF_SCHEDULED" && (
-                <form action={dropShiftAction}>
-                  <input type="hidden" name="shiftId" value={assignment.shiftId} />
-                  <button
-                    type="submit"
-                    className="text-xs font-medium text-red-600 hover:text-red-800"
-                  >
-                    Cancel
-                  </button>
-                </form>
-              )}
-            </div>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+              {assignment.status.replaceAll("_", " ").toLowerCase()}
+            </span>
           </div>
         ))}
         {assignments.length === 0 && (

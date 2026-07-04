@@ -141,7 +141,8 @@ a fresh local database:
 
 - **Worker self-scheduling** — the worker schedule page shows open shifts in
   their unit(s) with live signup counts; sign-up creates a `SELF_SCHEDULED`
-  assignment, cancel reverts it to `DROPPED`. Verified both directions.
+  assignment. Verified. (Workers can no longer self-cancel a shift — see
+  "Time off requests" below for the replacement flow.)
 - **Manager timecard approval** — Approve/Reject buttons on the approval
   queue call `setTimeEntryApproval`, scoped so a manager can only act on
   entries from workers who share one of their units. Verified an approval
@@ -173,6 +174,27 @@ a fresh local database:
   documents, and confirmed the sweep is idempotent (4 rows stayed 4 after
   repeated runs).
 
+- **Time off requests — replaces worker self-cancel.** Workers can no longer
+  drop a shift themselves (`dropShift`/`dropShiftAsUser` and the "Cancel"
+  button/route were removed everywhere — web, mobile, and
+  `/api/schedule/drop`). Instead they submit a `TimeOffRequest` (Sick /
+  Vacation / Life Balance, a date range, optional reason) from
+  `/worker/time-off` (web) or the mobile Time Off tab; pending requests can
+  be withdrawn by the requester. Managers review pending requests per unit at
+  `/manager/[unitId]/time-off`; approving a request auto-releases (drops)
+  any of that worker's active shift assignments whose start time falls
+  inside the approved range, freeing them back to open shifts — this is the
+  actual mechanism that replaces self-cancel, just gated behind approval
+  instead of instant. Verified end-to-end in the browser: signed up for a
+  shift as a worker, submitted a Vacation request covering that shift's
+  date, approved it as the manager, and confirmed via direct DB query that
+  only that one assignment's `updatedAt` changed (to `DROPPED`) at the exact
+  moment of approval — then confirmed the shift reappeared in the worker's
+  Open Shifts list. Also verified all four mobile API routes
+  (`GET`/`POST /api/timeoff`, `DELETE /api/timeoff/[id]`): list, create,
+  withdraw, re-withdraw correctly rejected ("already reviewed"), and 401 for
+  unauthenticated requests.
+
 Not yet exercised: admin call-in handling actions — those remain read-only
 in this pass.
 
@@ -192,10 +214,10 @@ src/lib/data/admin.ts       Admin-only queries (org-wide)
 src/lib/data/manager.ts     Manager queries, hard-scoped to their unit(s);
                             timecard approve/reject
 src/lib/data/worker.ts      Worker queries, hard-scoped to their own userId;
-                            open-shift sign-up/cancel
+                            open-shift sign-up, time off requests
 src/lib/data/messages.ts    Manager<->worker messaging, scoped to shared units
-src/app/actions/            Server actions (login, schedule sign-up/drop,
-                            timecard approve/reject, send message)
+src/app/actions/            Server actions (login, schedule sign-up,
+                            timecard approve/reject, send message, time off)
 src/app/admin/              Admin dashboard (org/unit overview, call-ins)
 src/app/manager/[unitId]/   Manager dashboard (census, schedule, approval
                             queue, messages)
@@ -334,9 +356,12 @@ API layer rather than the cookie-based web session:
   client stores it itself.
 - `GET /api/me`, `GET /api/schedule`, `GET /api/credentials` — read-only,
   Bearer-token authenticated.
-- `GET /api/schedule/open`, `POST /api/schedule/signup`,
-  `POST /api/schedule/drop` — self-scheduling, same rules as the web version
-  (unit-membership check on sign-up, self-scheduled-only on cancel).
+- `GET /api/schedule/open`, `POST /api/schedule/signup` — self-scheduling,
+  same unit-membership check as the web version. There's no drop/cancel
+  route — see "Time off requests" above for how workers get out of a shift.
+- `GET/POST /api/timeoff`, `DELETE /api/timeoff/[id]` — time off requests
+  (list mine, submit, withdraw a pending one), same rules as the web
+  version.
 - `GET /api/messages/threads`, `GET /api/messages/[partnerId]`,
   `POST /api/messages/send` — manager<->worker messaging, same
   shared-unit scoping as the web version.
@@ -352,8 +377,8 @@ API layer rather than the cookie-based web session:
   already-resolved user (`getScheduleForUser()`, `sendMessageAsUser()`,
   etc.) — the API routes call the core functions directly with
   `getApiUser()`'s result, so there's exactly one copy of each rule
-  (unit scoping, self-scheduled-only cancel, shared-unit messaging), not one
-  per client.
+  (unit scoping, shared-unit messaging, time-off eligibility), not one per
+  client.
 
 Mobile app structure (`mobile/src/`):
 
@@ -368,12 +393,16 @@ lib/settings.ts          alarm-offset-minutes preference (local, per device)
 app/_layout.tsx          Stack.Protected guard on auth state (Expo Router's
                          current recommended auth pattern)
 app/sign-in.tsx          badge number + password
-app/(app)/_layout.tsx    Tabs — My Schedule, My Credentials, Messages
+app/(app)/_layout.tsx    Tabs — My Schedule, Time Off, My Credentials,
+                         Messages, Alerts
 app/(app)/index.tsx      My Shifts + Open Shifts + Calendar sync card
+app/(app)/time-off.tsx   Request time off (Sick/Vacation/Life Balance) +
+                         own request list, withdraw while pending
 app/(app)/messages/      nested Stack: thread list -> conversation detail
 ```
 
-Scope: view schedule, self-schedule (sign up/cancel open shifts), view
+Scope: view schedule, self-schedule (sign up for open shifts; no self-cancel
+— submit a time off request instead), view
 credentials, manager<->worker messaging, and calendar sync with a
 configurable pre-shift alarm — matching everything the original spec
 described for mobile.

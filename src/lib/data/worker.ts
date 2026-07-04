@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, scopedUnitIds, type CurrentUser } from "@/lib/dal";
-import { CredentialType } from "@/generated/prisma/enums";
+import { CredentialType, TimeOffType } from "@/generated/prisma/enums";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -86,29 +86,6 @@ export async function signUpForShiftAsUser(user: CurrentUser, shiftId: string) {
     where: { shiftId_userId: { shiftId, userId: user.id } },
     update: { status: "SELF_SCHEDULED" },
     create: { shiftId, userId: user.id, status: "SELF_SCHEDULED" },
-  });
-}
-
-export async function dropShift(shiftId: string) {
-  const user = await getCurrentUser();
-  return dropShiftAsUser(user.id, shiftId);
-}
-
-/** Core logic split from dropShift() — see getOpenShiftsForUser(). */
-export async function dropShiftAsUser(userId: string, shiftId: string) {
-  const assignment = await prisma.scheduleAssignment.findUnique({
-    where: { shiftId_userId: { shiftId, userId } },
-  });
-  if (!assignment || assignment.userId !== userId) {
-    throw new Error("No signup found to cancel");
-  }
-  if (assignment.status !== "SELF_SCHEDULED") {
-    throw new Error("Only self-scheduled signups can be cancelled here — ask your manager about assigned shifts");
-  }
-
-  await prisma.scheduleAssignment.update({
-    where: { id: assignment.id },
-    data: { status: "DROPPED" },
   });
 }
 
@@ -299,4 +276,78 @@ export async function getMyTimeEntries() {
     orderBy: { timestamp: "desc" },
     take: 50,
   });
+}
+
+/** Parses a bare YYYY-MM-DD (what <input type="date"> submits) as local
+ * midnight rather than UTC midnight — see the same fix on Credential
+ * expirationDate for why. Falls back to a plain Date parse for anything else
+ * (e.g. an ISO timestamp from the mobile app). */
+function parseDateOnly(raw: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00`) : new Date(raw);
+}
+
+export type NewTimeOffRequestInput = {
+  type: string;
+  startDate: string;
+  endDate: string;
+  reason?: string | null;
+};
+
+export async function requestMyTimeOff(input: NewTimeOffRequestInput) {
+  const user = await getCurrentUser();
+  return requestTimeOffForUser(user.id, input);
+}
+
+export async function requestTimeOffForUser(userId: string, input: NewTimeOffRequestInput) {
+  if (!Object.hasOwn(TimeOffType, input.type)) {
+    throw new Error("Pick a time off type from the list.");
+  }
+
+  const startDate = parseDateOnly(input.startDate);
+  const endDate = parseDateOnly(input.endDate);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    throw new Error("Enter valid start and end dates.");
+  }
+  if (endDate < startDate) {
+    throw new Error("End date can't be before the start date.");
+  }
+
+  return prisma.timeOffRequest.create({
+    data: {
+      userId,
+      type: input.type as TimeOffType,
+      startDate,
+      endDate,
+      reason: input.reason?.trim() || null,
+    },
+  });
+}
+
+export async function getMyTimeOffRequests() {
+  const user = await getCurrentUser();
+  return getTimeOffRequestsForUser(user.id);
+}
+
+export async function getTimeOffRequestsForUser(userId: string) {
+  return prisma.timeOffRequest.findMany({
+    where: { userId },
+    orderBy: { requestedAt: "desc" },
+  });
+}
+
+/** Only the requester can withdraw, and only before a manager has decided —
+ * once approved it's affected other people's shift coverage, so it needs a
+ * manager to undo it, not a self-service action. */
+export async function withdrawMyTimeOffRequest(requestId: string) {
+  const user = await getCurrentUser();
+  return withdrawTimeOffRequestForUser(user.id, requestId);
+}
+
+export async function withdrawTimeOffRequestForUser(userId: string, requestId: string) {
+  const result = await prisma.timeOffRequest.deleteMany({
+    where: { id: requestId, userId, status: "PENDING" },
+  });
+  if (result.count === 0) {
+    throw new Error("Request not found or already reviewed");
+  }
 }

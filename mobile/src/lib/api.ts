@@ -137,12 +137,6 @@ export function signUpForShift(shiftId: string) {
   });
 }
 
-export function dropShift(shiftId: string) {
-  return request<{ ok: true }>("/api/schedule/drop", {
-    method: "POST",
-    body: JSON.stringify({ shiftId }),
-  });
-}
 
 export type AppNotification = {
   id: string;
@@ -195,6 +189,41 @@ export function registerPushToken(token: string) {
   return request<{ ok: true }>("/api/me/push-token", {
     method: "POST",
     body: JSON.stringify({ token }),
+  });
+}
+
+export type TimeOffRequestType = "SICK" | "VACATION" | "LIFE_BALANCE";
+export type TimeOffRequestStatus = "PENDING" | "APPROVED" | "DENIED";
+
+export type TimeOffRequest = {
+  id: string;
+  type: TimeOffRequestType;
+  startDate: string;
+  endDate: string;
+  reason: string | null;
+  status: TimeOffRequestStatus;
+  requestedAt: string;
+};
+
+export function getTimeOffRequests() {
+  return request<{ requests: TimeOffRequest[] }>("/api/timeoff");
+}
+
+export function requestTimeOff(
+  type: TimeOffRequestType,
+  startDate: string,
+  endDate: string,
+  reason?: string
+) {
+  return request<{ request: TimeOffRequest }>("/api/timeoff", {
+    method: "POST",
+    body: JSON.stringify({ type, startDate, endDate, reason }),
+  });
+}
+
+export function withdrawTimeOffRequest(requestId: string) {
+  return request<{ ok: true }>(`/api/timeoff/${requestId}`, {
+    method: "DELETE",
   });
 }
 

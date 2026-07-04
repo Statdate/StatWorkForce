@@ -5,7 +5,6 @@ import {
   getSchedule,
   getOpenShifts,
   signUpForShift,
-  dropShift,
   type ScheduleAssignment,
   type OpenShift,
 } from '@/lib/api';
@@ -70,16 +69,6 @@ export default function ScheduleScreen() {
     setPendingShiftId(shiftId);
     try {
       await signUpForShift(shiftId);
-      await load();
-    } finally {
-      setPendingShiftId(null);
-    }
-  }
-
-  async function handleCancel(shiftId: string) {
-    setPendingShiftId(shiftId);
-    try {
-      await dropShift(shiftId);
       await load();
     } finally {
       setPendingShiftId(null);
@@ -235,16 +224,6 @@ export default function ScheduleScreen() {
                     {assignment.shift.jobType.name} ·{' '}
                     {assignment.status.replaceAll('_', ' ').toLowerCase()}
                   </ThemedText>
-                  {assignment.status === 'SELF_SCHEDULED' && (
-                    <Pressable
-                      onPress={() => handleCancel(assignment.shiftId)}
-                      disabled={pendingShiftId === assignment.shiftId}
-                      style={styles.actionButton}>
-                      <ThemedText type="small" style={styles.cancelText}>
-                        {pendingShiftId === assignment.shiftId ? 'Cancelling…' : 'Cancel'}
-                      </ThemedText>
-                    </Pressable>
-                  )}
                 </ThemedView>
               );
             }

@@ -47,6 +47,18 @@ enum AssignmentStatus {
   DROPPED
 }
 
+enum TimeOffType {
+  SICK
+  VACATION
+  LIFE_BALANCE
+}
+
+enum TimeOffRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
 enum TimeEntryType {
   CLOCK_IN
   CLOCK_OUT
@@ -174,6 +186,8 @@ model User {
   reportedCallIns             CallIn[]              @relation("ReportedCallIns")
   handledCallIns              CallIn[]              @relation("HandledCallIns")
   publishedSchedulePeriods    SchedulePeriod[]      @relation("PublishedBy")
+  timeOffRequests             TimeOffRequest[]      @relation("TimeOffRequester")
+  reviewedTimeOffRequests     TimeOffRequest[]       @relation("TimeOffReviewer")
 
   @@unique([hospitalId, badgeNumber])
 }
@@ -282,6 +296,29 @@ model ScheduleAssignment {
   updatedAt    DateTime         @updatedAt
 
   @@unique([shiftId, userId])
+}
+
+// Workers can no longer cancel a shift directly — they submit one of these
+// instead. On approval, any of their scheduled shifts that fall inside
+// [startDate, endDate] are released back to open shifts (see
+// reviewTimeOffRequest in src/lib/data/manager.ts).
+model TimeOffRequest {
+  id           String               @id @default(cuid())
+  userId       String
+  user         User                 @relation("TimeOffRequester", fields: [userId], references: [id], onDelete: Cascade)
+  type         TimeOffType
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  status       TimeOffRequestStatus @default(PENDING)
+  requestedAt  DateTime             @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   User?                @relation("TimeOffReviewer", fields: [reviewedById], references: [id])
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([userId, status])
 }
 
 // ---------------------------------------------------------------------------

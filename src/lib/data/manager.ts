@@ -175,3 +175,68 @@ export async function getUnitCredentials(unitId: string) {
 
   return { credentials, workersWithoutCredentials };
 }
+
+/** Pending-first time-off requests for every worker in the unit — the
+ * manager's action queue. Requests already decided are included after, so
+ * history is visible without a separate page. */
+export async function getUnitTimeOffRequests(unitId: string) {
+  await assertUnitInScope(unitId);
+
+  const requests = await prisma.timeOffRequest.findMany({
+    where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId } } } },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+      reviewedBy: { select: { firstName: true, lastName: true } },
+    },
+    orderBy: [{ status: "asc" }, { requestedAt: "desc" }],
+  });
+
+  return requests;
+}
+
+/** Approve or deny a worker's time-off request. On approval, any of that
+ * worker's active shift assignments inside [startDate, endDate] are released
+ * back to open shifts — this is the replacement for self-service cancel:
+ * the shift only actually gets dropped once a manager signs off. */
+export async function reviewTimeOffRequest(
+  requestId: string,
+  decision: "APPROVED" | "DENIED"
+) {
+  const manager = await requireRole("MANAGER", "ADMIN");
+  const allowedUnitIds = scopedUnitIds(manager);
+
+  const request = await prisma.timeOffRequest.findUnique({
+    where: { id: requestId },
+    include: { user: { select: { id: true, unitMemberships: { select: { unitId: true } } } } },
+  });
+  if (!request) throw new Error("Time off request not found");
+  if (request.status !== "PENDING") throw new Error("This request was already reviewed");
+
+  if (allowedUnitIds !== null) {
+    const requesterUnitIds = request.user.unitMemberships.map((m) => m.unitId);
+    const inScope = requesterUnitIds.some((id) => allowedUnitIds.includes(id));
+    if (!inScope) throw new Error("Requester is not in the current manager's scope");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.timeOffRequest.update({
+      where: { id: requestId },
+      data: { status: decision, reviewedAt: new Date(), reviewedById: manager.id },
+    });
+
+    if (decision === "APPROVED") {
+      // endDate is stored as local midnight of the last day — use an
+      // exclusive upper bound one day later so shifts starting later that
+      // same day are still caught, not just ones before midnight.
+      const rangeEnd = new Date(request.endDate.getTime() + 24 * 60 * 60 * 1000);
+      await tx.scheduleAssignment.updateMany({
+        where: {
+          userId: request.userId,
+          status: { in: ["SELF_SCHEDULED", "MANAGER_ASSIGNED", "APPROVED"] },
+          shift: { startTime: { gte: request.startDate, lt: rangeEnd } },
+        },
+        data: { status: "DROPPED" },
+      });
+    }
+  });
+}

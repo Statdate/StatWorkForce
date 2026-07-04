@@ -41,6 +41,12 @@ export default async function ManagerCredentialsPage({
       </Link>
       <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Credentials</span>
       <Link
+        href={`/manager/${unitId}/time-off`}
+        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
+      >
+        Time off
+      </Link>
+      <Link
         href={`/manager/${unitId}/messages`}
         className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
       >
