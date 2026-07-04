@@ -5,6 +5,7 @@ import { CREDENTIAL_TYPE_OPTIONS, credentialDisplayName } from "@/lib/credential
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 import { CredentialPreviewButton } from "@/components/credential-preview-button";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
 const TWO_MONTHS_MS = 60 * 24 * 60 * 60 * 1000;
 
@@ -17,8 +18,16 @@ function credentialStatus(expirationDate: Date) {
   return { label: "Current", className: "bg-emerald-100 text-emerald-700" };
 }
 
-export default async function WorkerCredentialsPage() {
-  const [user, credentials] = await Promise.all([getCurrentUser(), getMyCredentials()]);
+export default async function WorkerCredentialsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const [user, credentials, { error }] = await Promise.all([
+    getCurrentUser(),
+    getMyCredentials(),
+    searchParams,
+  ]);
 
   const nav = <WorkerNav active="/worker/credentials" />;
 
@@ -28,6 +37,10 @@ export default async function WorkerCredentialsPage() {
       <p className="mt-1 text-sm text-slate-500">
         Licenses and certifications on file. You&apos;ll get a reminder 2 months before expiration.
       </p>
+
+      <div className="mt-4">
+        <ActionErrorBanner message={error} />
+      </div>
 
       <div className="mt-6 space-y-3">
         {credentials.map((credential) => {

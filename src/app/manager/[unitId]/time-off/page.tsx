@@ -5,11 +5,14 @@ import { getManagerUnits, getUnitTimeOffRequests } from "@/lib/data/manager";
 import { reviewTimeOffRequestAction } from "@/app/actions/timeoff";
 import { TIME_OFF_TYPE_LABELS, timeOffStatusStyle } from "@/lib/timeoff-types";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
 export default async function ManagerTimeOffPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ unitId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { unitId } = await params;
   const units = await getManagerUnits();
@@ -18,7 +21,11 @@ export default async function ManagerTimeOffPage({
     notFound();
   }
 
-  const [user, requests] = await Promise.all([getCurrentUser(), getUnitTimeOffRequests(unitId)]);
+  const [user, requests, { error }] = await Promise.all([
+    getCurrentUser(),
+    getUnitTimeOffRequests(unitId),
+    searchParams,
+  ]);
 
   const pending = requests.filter((r) => r.status === "PENDING");
   const decided = requests.filter((r) => r.status !== "PENDING");
@@ -54,6 +61,10 @@ export default async function ManagerTimeOffPage({
         Approving releases any of the worker&apos;s shifts inside that date range back to open
         shifts.
       </p>
+
+      <div className="mt-4">
+        <ActionErrorBanner message={error} />
+      </div>
 
       <h2 className="mt-6 text-sm font-semibold text-slate-900">Pending</h2>
       <div className="mt-3 space-y-3">

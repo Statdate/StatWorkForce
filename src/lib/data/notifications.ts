@@ -44,6 +44,29 @@ export async function ensureCredentialExpiryNotifications() {
     },
   });
 
+  // Batch the manager lookup once for every unit touched by any due
+  // credential, instead of one query per credential inside the loop below —
+  // that N+1 pattern is fine at seed-data scale but doesn't scale to a real
+  // hospital's daily sweep.
+  const allUnitIds = [...new Set(due.flatMap((c) => c.user.unitMemberships.map((m) => m.unitId)))];
+  const managersByUnit = new Map<string, string[]>();
+  if (allUnitIds.length > 0) {
+    const managers = await prisma.user.findMany({
+      where: {
+        accountType: "MANAGER",
+        isActive: true,
+        unitMemberships: { some: { unitId: { in: allUnitIds } } },
+      },
+      select: { id: true, unitMemberships: { select: { unitId: true } } },
+    });
+    for (const manager of managers) {
+      for (const { unitId } of manager.unitMemberships) {
+        if (!allUnitIds.includes(unitId)) continue;
+        managersByUnit.set(unitId, [...(managersByUnit.get(unitId) ?? []), manager.id]);
+      }
+    }
+  }
+
   for (const credential of due) {
     const name = credentialDisplayName(credential);
     const expired = credential.expirationDate.getTime() < Date.now();
@@ -78,17 +101,8 @@ export async function ensureCredentialExpiryNotifications() {
 
     if (!credential.managerReminderSentAt) {
       const unitIds = credential.user.unitMemberships.map((m) => m.unitId);
-      const managers = unitIds.length
-        ? await prisma.user.findMany({
-            where: {
-              accountType: "MANAGER",
-              isActive: true,
-              unitMemberships: { some: { unitId: { in: unitIds } } },
-            },
-            select: { id: true },
-          })
-        : [];
-      for (const manager of managers) {
+      const managerIds = [...new Set(unitIds.flatMap((unitId) => managersByUnit.get(unitId) ?? []))];
+      for (const managerId of managerIds) {
         const title = expired
           ? `${workerName}'s ${name} has expired`
           : `${workerName}'s ${name} expires on ${dateText}`;
@@ -96,7 +110,7 @@ export async function ensureCredentialExpiryNotifications() {
         ops.push(
           prisma.notification.create({
             data: {
-              userId: manager.id,
+              userId: managerId,
               type: "CREDENTIAL_EXPIRING_MANAGER",
               title,
               body,
@@ -104,7 +118,7 @@ export async function ensureCredentialExpiryNotifications() {
             },
           })
         );
-        pushSends.push({ userId: manager.id, title, body });
+        pushSends.push({ userId: managerId, title, body });
       }
     }
 

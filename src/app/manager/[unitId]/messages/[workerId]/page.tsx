@@ -5,21 +5,25 @@ import { getManagerUnits } from "@/lib/data/manager";
 import { getConversation, getUnitMessageThreads } from "@/lib/data/messages";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { MessageThread } from "@/components/message-thread";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
 export default async function ManagerMessageThreadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ unitId: string; workerId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { unitId, workerId } = await params;
   const units = await getManagerUnits();
   const activeUnit = units.find((u) => u.id === unitId);
   if (!activeUnit) notFound();
 
-  const [user, threads, messages] = await Promise.all([
+  const [user, threads, messages, { error }] = await Promise.all([
     getCurrentUser(),
     getUnitMessageThreads(unitId),
     getConversation(workerId),
+    searchParams,
   ]);
 
   const activeWorker = threads.find((w) => w.id === workerId);
@@ -32,6 +36,8 @@ export default async function ManagerMessageThreadPage({
           ← All conversations
         </Link>
       </div>
+      <ActionErrorBanner message={error} />
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
         <div className="space-y-2">
           {threads.map((worker) => (

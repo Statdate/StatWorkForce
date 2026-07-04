@@ -16,6 +16,7 @@ import {
   closeScheduleRequestWindowAction,
 } from "@/app/actions/schedule-requests";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
 function priorityBadgeClassName(rank: number | undefined) {
   if (rank === 1) return "bg-emerald-100 text-emerald-700";
@@ -26,8 +27,10 @@ function priorityBadgeClassName(rank: number | undefined) {
 
 export default async function ManagerUnitPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ unitId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { unitId } = await params;
   const units = await getManagerUnits();
@@ -40,12 +43,13 @@ export default async function ManagerUnitPage({
   const now = new Date();
   const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [user, shifts, approvalQueue, staff, schedulePeriods] = await Promise.all([
+  const [user, shifts, approvalQueue, staff, schedulePeriods, { error }] = await Promise.all([
     getCurrentUser(),
     getUnitCensus(unitId, now, twoWeeksOut),
     getApprovalQueue(unitId),
     getUnitStaff(unitId),
     getSchedulePeriods(unitId),
+    searchParams,
   ]);
 
   const openPeriods = schedulePeriods.filter((p) => p.requestsOpen);
@@ -104,6 +108,10 @@ export default async function ManagerUnitPage({
       <p className="mt-1 text-sm text-slate-500">
         Census, upcoming schedule, and biweekly timecard approvals for this unit.
       </p>
+
+      <div className="mt-4">
+        <ActionErrorBanner message={error} />
+      </div>
 
       <section className="mt-8">
         <h2 className="text-lg font-medium text-slate-900">Live census — next 14 days</h2>

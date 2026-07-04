@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { submitMyScheduleRequest } from "@/lib/data/worker";
 import { createScheduleRequestWindow, setScheduleRequestWindow } from "@/lib/data/manager";
+import { redirectWithError } from "@/lib/action-error";
 
 export async function submitScheduleRequestAction(formData: FormData) {
   const schedulePeriodId = String(formData.get("schedulePeriodId"));
@@ -12,20 +13,32 @@ export async function submitScheduleRequestAction(formData: FormData) {
     .filter(Boolean);
   const note = formData.get("note")?.toString() ?? null;
 
-  await submitMyScheduleRequest({ schedulePeriodId, requestedDates, note });
+  try {
+    await submitMyScheduleRequest({ schedulePeriodId, requestedDates, note });
+  } catch (error) {
+    redirectWithError("/worker", error);
+  }
   revalidatePath("/worker");
 }
 
 export async function createScheduleRequestWindowAction(formData: FormData) {
   const unitId = String(formData.get("unitId"));
   const startDate = String(formData.get("startDate"));
-  await createScheduleRequestWindow(unitId, startDate);
+  try {
+    await createScheduleRequestWindow(unitId, startDate);
+  } catch (error) {
+    redirectWithError(`/manager/${unitId}`, error);
+  }
   revalidatePath(`/manager/${unitId}`);
 }
 
 export async function closeScheduleRequestWindowAction(formData: FormData) {
   const unitId = String(formData.get("unitId"));
   const schedulePeriodId = String(formData.get("schedulePeriodId"));
-  await setScheduleRequestWindow(schedulePeriodId, false);
+  try {
+    await setScheduleRequestWindow(schedulePeriodId, false);
+  } catch (error) {
+    redirectWithError(`/manager/${unitId}`, error);
+  }
   revalidatePath(`/manager/${unitId}`);
 }

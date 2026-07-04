@@ -9,9 +9,18 @@ import {
 } from "@/lib/timeoff-types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
-export default async function WorkerTimeOffPage() {
-  const [user, requests] = await Promise.all([getCurrentUser(), getMyTimeOffRequests()]);
+export default async function WorkerTimeOffPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const [user, requests, { error }] = await Promise.all([
+    getCurrentUser(),
+    getMyTimeOffRequests(),
+    searchParams,
+  ]);
 
   const nav = <WorkerNav active="/worker/time-off" />;
 
@@ -22,6 +31,10 @@ export default async function WorkerTimeOffPage() {
         Need a shift released? Request time off instead of cancelling it yourself — your manager
         reviews it and releases any shifts in that window once approved.
       </p>
+
+      <div className="mt-4">
+        <ActionErrorBanner message={error} />
+      </div>
 
       <div className="mt-6 space-y-3">
         {requests.map((request) => {

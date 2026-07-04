@@ -205,6 +205,10 @@ model UnitMembership {
   createdAt       DateTime       @default(now())
 
   @@unique([userId, unitId])
+  // The unique index above covers lookups by userId (leftmost column) but
+  // not the unitId-only queries in getUnitStaff()/getMessageThreads() —
+  // Postgres won't use a composite index for a filter on its second column.
+  @@index([unitId])
 }
 
 // Extensible "superuser" grant for extra schedule-balancing permissions.
@@ -320,6 +324,9 @@ model ScheduleAssignment {
   updatedAt    DateTime         @updatedAt
 
   @@unique([shiftId, userId])
+  // getScheduleForUser() queries by userId alone — not covered by the
+  // composite unique index above (shiftId is its leftmost column).
+  @@index([userId])
 }
 
 // Workers can no longer cancel a shift directly — they submit one of these
@@ -404,6 +411,9 @@ model Credential {
   updatedAt             DateTime       @updatedAt
 
   @@index([expirationDate])
+  // Covers getCredentialsForUser()'s where-userId + order-by-expirationDate
+  // (the worker credentials list and the mobile credentials tab).
+  @@index([userId, expirationDate])
 }
 
 // ---------------------------------------------------------------------------

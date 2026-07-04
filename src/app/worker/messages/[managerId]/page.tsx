@@ -5,18 +5,22 @@ import { getConversation, getMessageThreads } from "@/lib/data/messages";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { MessageThread } from "@/components/message-thread";
 import { WorkerNav } from "@/components/worker-nav";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
 export default async function WorkerMessageThreadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ managerId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { managerId } = await params;
 
-  const [user, threads, messages] = await Promise.all([
+  const [user, threads, messages, { error }] = await Promise.all([
     getCurrentUser(),
     getMessageThreads(),
     getConversation(managerId),
+    searchParams,
   ]);
 
   const activeManager = threads.find((m) => m.id === managerId);
@@ -31,6 +35,8 @@ export default async function WorkerMessageThreadPage({
           ← All conversations
         </Link>
       </div>
+      <ActionErrorBanner message={error} />
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[220px_1fr]">
         <div className="space-y-2">
           {threads.map((manager) => (

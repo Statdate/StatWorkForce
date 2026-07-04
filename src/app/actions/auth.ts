@@ -16,14 +16,18 @@ export async function login(_state: LoginFormState, formData: FormData): Promise
   }
 
   const { badgeNumber, password } = validatedFields.data;
-  const user = await authenticateUser(badgeNumber, password);
+  const result = await authenticateUser(badgeNumber, password);
 
-  if (!user) {
+  if (!result.ok) {
+    if (result.reason === "locked") {
+      const minutes = Math.ceil(result.retryAfterSeconds / 60);
+      return { message: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.` };
+    }
     return { message: "Invalid badge number or password." };
   }
 
-  await createSession(user.id, user.accountType);
-  redirect(dashboardPathFor(user.accountType));
+  await createSession(result.user.id, result.user.accountType);
+  redirect(dashboardPathFor(result.user.accountType));
 }
 
 export async function logout() {

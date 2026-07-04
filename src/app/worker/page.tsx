@@ -5,13 +5,19 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 import { ScheduleCalendar } from "@/components/schedule-calendar";
 import { RequestDaysPicker } from "@/components/request-days-picker";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
-export default async function WorkerSchedulePage() {
-  const [user, assignments, openShifts, openRequestWindows] = await Promise.all([
+export default async function WorkerSchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const [user, assignments, openShifts, openRequestWindows, { error }] = await Promise.all([
     getCurrentUser(),
     getMySchedule(),
     getOpenShifts(),
     getOpenScheduleRequestWindows(),
+    searchParams,
   ]);
 
   const nav = <WorkerNav active="/worker" />;
@@ -22,6 +28,10 @@ export default async function WorkerSchedulePage() {
       <p className="mt-1 text-sm text-slate-500">
         Upcoming shifts you&apos;re assigned to or have signed up for.
       </p>
+
+      <div className="mt-4">
+        <ActionErrorBanner message={error} />
+      </div>
 
       <div className="mt-6">
         <ScheduleCalendar

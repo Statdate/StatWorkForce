@@ -12,12 +12,19 @@ export async function POST(request: Request) {
   }
 
   const { badgeNumber, password } = validatedFields.data;
-  const user = await authenticateUser(badgeNumber, password);
+  const result = await authenticateUser(badgeNumber, password);
 
-  if (!user) {
+  if (!result.ok) {
+    if (result.reason === "locked") {
+      return corsJson(
+        { error: "Too many failed attempts. Try again later." },
+        { status: 429, headers: { "Retry-After": String(result.retryAfterSeconds) } }
+      );
+    }
     return corsJson({ error: "Invalid badge number or password." }, { status: 401 });
   }
 
+  const { user } = result;
   const token = await createMobileToken(user.id, user.accountType);
 
   return corsJson({
