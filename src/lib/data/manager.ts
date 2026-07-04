@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole, scopedUnitIds } from "@/lib/dal";
 import { sendPushToUser } from "@/lib/push";
@@ -20,22 +21,36 @@ async function assertUnitInScope(unitId: string) {
   return user;
 }
 
+// getManagerUnits() backs the unit-switcher nav shown on every manager page
+// (dashboard, credentials, messages, time-off) — it was re-querying the same
+// rarely-changing unit list on every single navigation. Cached for 5 minutes,
+// keyed by the resolved hospitalId/unitIds (never by the raw session — the
+// auth check itself stays outside the cached scope, since cookies() can't be
+// read inside one).
+const getCachedUnitsForHospital = unstable_cache(
+  async (hospitalId: string) =>
+    prisma.unit.findMany({ where: { hospitalId }, orderBy: { name: "asc" } }),
+  ["units-for-hospital"],
+  { revalidate: 300 }
+);
+
+const getCachedUnitsByIds = unstable_cache(
+  async (unitIds: string[]) =>
+    prisma.unit.findMany({ where: { id: { in: unitIds } }, orderBy: { name: "asc" } }),
+  ["units-by-ids"],
+  { revalidate: 300 }
+);
+
 /** Units the current manager is assigned to. Admins get all units in their hospital. */
 export async function getManagerUnits() {
   const user = await requireRole("MANAGER", "ADMIN");
 
   if (user.accountType === "ADMIN") {
-    return prisma.unit.findMany({
-      where: { hospitalId: user.hospitalId },
-      orderBy: { name: "asc" },
-    });
+    return getCachedUnitsForHospital(user.hospitalId);
   }
 
   const unitIds = scopedUnitIds(user) ?? [];
-  return prisma.unit.findMany({
-    where: { id: { in: unitIds } },
-    orderBy: { name: "asc" },
-  });
+  return getCachedUnitsByIds(unitIds);
 }
 
 /** Shifts + fill counts for a unit's current schedule period (census view). */
