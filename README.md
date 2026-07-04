@@ -262,24 +262,35 @@ src/app/login/              Badge number + password login
    S3/R2 by replacing only `saveCredentialFileForUser` /
    `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
    touches the bytes.
-6. **Notification delivery — in-app + push done.** Credential-expiry
-   reminders exist as in-app notifications (idempotent sweep, 2 months
-   before expiration, worker + unit managers) *and* as real push
-   notifications via Expo's push API (`src/lib/push.ts`), sent alongside
-   every notification the sweep creates. The daily trigger is a GitHub
-   Actions scheduled workflow (`.github/workflows/credential-sweep.yml`)
-   calling `POST /api/cron/credential-sweep`, since Render's free tier has
-   no built-in scheduler — this replaces the old load-triggered-only sweep
-   (that still runs too, as a fallback, whenever a notification page loads).
+6. **Notification delivery — in-app done, push registration done, APNs
+   credentials are the one remaining step.** Credential-expiry reminders
+   exist as in-app notifications (idempotent sweep, 2 months before
+   expiration, worker + unit managers) *and* as real push notifications via
+   Expo's push API (`src/lib/push.ts`), sent alongside every notification
+   the sweep creates. The daily trigger is a GitHub Actions scheduled
+   workflow (`.github/workflows/credential-sweep.yml`) calling `POST
+   /api/cron/credential-sweep`, since Render's free tier has no built-in
+   scheduler — this replaces the old load-triggered-only sweep (that still
+   runs too, as a fallback, whenever a notification page loads). Two
+   required env vars for the cron path: `CRON_SECRET`, set to the same
+   value in Render's dashboard and as a GitHub Actions repo secret
+   (Settings → Secrets and variables → Actions) — **done, verified live**
+   (the cron endpoint returns `{"ok":true,...}` on the production URL).
    The mobile app is linked to an EAS project (`extra.eas.projectId` in
-   `app.json`, owner `stat-workforce`), so
-   `registerForPushNotificationsAsync()` can issue real device push tokens
-   instead of no-op'ing — confirmed the project ID is actually embedded in
-   the built app (`EXConstants.bundle/app.config`), not just the source
-   file. Two required env vars for the cron path: `CRON_SECRET` set to the
-   same value in Render's dashboard and as a GitHub Actions repo secret
-   (Settings → Secrets and variables → Actions). SMS/email delivery is still
-   an open choice if push isn't enough on its own.
+   `app.json`, owner `stat-workforce`) and **registration is confirmed
+   working on a real device**: signed in on the iOS Simulator and watched
+   `User.expoPushToken` update from a test placeholder to a real
+   `ExponentPushToken[...]` value. **The one thing left: APNs credentials.**
+   Sending an actual push to that real token returns `InvalidCredentials` —
+   "Could not find APNs credentials for com.anonymous.statworkforce." iOS
+   push requires an Apple Push Notification key registered with Apple and
+   uploaded to the EAS project, which needs an **Apple Developer Program
+   account** ($99/year, if not already enrolled). Once enrolled, run `npx
+   eas-cli credentials` from `mobile/` (interactive — needs an Apple ID
+   login, same as `eas login` did) and let EAS generate/upload the key.
+   After that, no other code changes are needed — the send path is already
+   wired, tested, and waiting on this one credential. SMS/email delivery is
+   still an open choice if push isn't enough on its own.
 
 ## Deploying to Render
 
@@ -457,16 +468,19 @@ means the device itself, not your dev machine.
   document**, picking a file from the Files app, and seeing the card flip to
   "Document: <name>". That's the next thing to poke at in the Simulator.
 - **Push notifications**: `expo-notifications` compiled and installed
-  cleanly in the native build. The backend half is fully verified — `POST
-  /api/me/push-token` accepts/rejects tokens correctly, and a real sweep run
-  confirmed `sendPushToUser` calls Expo's push API with the right payload
-  shape (Expo's API echoed back its documented per-token error format for a
-  deliberately fake test token, proving the request itself is well-formed).
-  The mobile app is now linked to an EAS project (`eas init`, done — see
-  "Notification delivery" above), confirmed embedded in the rebuilt app's
-  `EXConstants.bundle/app.config`, so `registerForPushNotificationsAsync()`
-  should register a real token on next login. **Not yet confirmed: an
-  actual push landing on the device** — that needs signing in on the
-  Simulator and checking a notification arrives once a credential is due,
-  which wasn't hand-tested here (same computer-use/simctl limitations as
-  the rest of this section).
+  cleanly in the native build. Anthony signed in on the iOS Simulator by
+  hand (computer-use still can't drive the Simulator directly in this
+  environment — see the calendar-sync section above for the same limit) and
+  `User.expoPushToken` updated from a placeholder to a real
+  `ExponentPushToken[p0ujdSLTpQOWr5idnpcFZl]`, confirming the entire
+  registration chain: permission prompt → real token issued via the linked
+  EAS project → sent to `POST /api/me/push-token` → saved. Sending an
+  actual push to that real token via Expo's API returned
+  `InvalidCredentials`: `"Could not find APNs credentials for
+  com.anonymous.statworkforce"`. That's expected — iOS push needs an APNs
+  key uploaded to the EAS project, which needs an Apple Developer Program
+  account. See "Notification delivery" above for the exact next command
+  (`eas credentials`) once that account exists. Every other part of the
+  chain — token registration, the sweep, the Expo API call shape — is now
+  proven end-to-end on a real device; APNs credentials are the only gap
+  left.
