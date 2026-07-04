@@ -13,6 +13,9 @@ type AuthUser = {
   // Optional: absent in the rare fallback path where a fresh login's
   // follow-up getMe() call fails and we fall back to the login response
   // alone, which doesn't carry these.
+  jobType?: { id: string; name: string } | null;
+  title?: string | null;
+  shiftPattern?: string | null;
   hospitalName?: string;
   units?: { id: string; name: string; type: string }[];
 };

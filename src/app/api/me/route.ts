@@ -14,6 +14,8 @@ export async function GET() {
     accountType: user.accountType,
     badgeNumber: user.badgeNumber,
     jobType: user.jobType,
+    title: user.title,
+    shiftPattern: user.shiftPattern,
     hospitalName: user.hospital.name,
     units: user.unitMemberships.map((m) => m.unit),
   });

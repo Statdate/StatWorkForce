@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, RefreshControl, StyleSheet, Pressable, TextInput, Platform, Modal, FlatList, Switch } from 'react-native';
+import { ScrollView, RefreshControl, StyleSheet, Pressable, Platform, Modal, FlatList, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSchedule, type ScheduleAssignment } from '@/lib/api';
 import { syncAssignmentsToCalendar, listWritableCalendars, CALENDAR_SYNC_SUPPORTED, type PickableCalendar } from '@/lib/calendar';
@@ -9,6 +9,8 @@ import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+
+const ALARM_OFFSET_OPTIONS = [15, 30, 45, 60, 90, 120];
 
 export default function SettingsScreen() {
   const { user } = useAuth();
@@ -22,7 +24,7 @@ export default function SettingsScreen() {
   const [biometricError, setBiometricError] = useState<string | null>(null);
   const [isTogglingBiometric, setIsTogglingBiometric] = useState(false);
 
-  const [alarmOffset, setAlarmOffsetState] = useState('60');
+  const [alarmOffset, setAlarmOffsetState] = useState(60);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
@@ -47,7 +49,7 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (!isWorker) return;
     load();
-    getAlarmOffsetMinutes().then((minutes) => setAlarmOffsetState(String(minutes)));
+    getAlarmOffsetMinutes().then(setAlarmOffsetState);
     getSelectedCalendar().then((selection) => {
       if (selection) {
         setCalendarId(selection.id);
@@ -83,19 +85,16 @@ export default function SettingsScreen() {
     }
   }
 
-  async function handleAlarmOffsetChange(value: string) {
-    setAlarmOffsetState(value);
-    const minutes = Number(value);
-    if (Number.isFinite(minutes) && minutes >= 0) {
-      await setAlarmOffsetMinutes(minutes);
-    }
+  async function handleAlarmOffsetChange(minutes: number) {
+    setAlarmOffsetState(minutes);
+    await setAlarmOffsetMinutes(minutes);
   }
 
   async function handleSync() {
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const result = await syncAssignmentsToCalendar(assignments, Number(alarmOffset) || 0, calendarId);
+      const result = await syncAssignmentsToCalendar(assignments, alarmOffset, calendarId);
       const parts = [`${result.syncedCount} added`];
       if (result.skippedCount > 0) parts.push(`${result.skippedCount} already synced or not yet published`);
       if (result.errorCount > 0) parts.push(`${result.errorCount} failed`);
@@ -142,6 +141,23 @@ export default function SettingsScreen() {
         <ScrollView
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
+          {user && (
+            <ThemedView type="backgroundElement" style={styles.syncCard}>
+              <ThemedText type="smallBold">Profile</ThemedText>
+              <ThemedText type="small">
+                {user.firstName} {user.lastName}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {[user.title, user.jobType?.name].filter(Boolean).join(' · ') || 'No position set'}
+              </ThemedText>
+              {user.shiftPattern && (
+                <ThemedText type="small" themeColor="textSecondary">
+                  Schedule: {user.shiftPattern}
+                </ThemedText>
+              )}
+            </ThemedView>
+          )}
+
           <ThemedView type="backgroundElement" style={styles.syncCard}>
             <ThemedText type="smallBold">Security</ThemedText>
             {isBiometricSupported ? (
@@ -175,15 +191,23 @@ export default function SettingsScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 Adds your published shifts to your phone calendar with a reminder before each one.
               </ThemedText>
+              <ThemedText type="small">Remind me before each shift</ThemedText>
               <ThemedView style={styles.offsetRow}>
-                <ThemedText type="small">Remind me</ThemedText>
-                <TextInput
-                  value={alarmOffset}
-                  onChangeText={handleAlarmOffsetChange}
-                  keyboardType="number-pad"
-                  style={styles.offsetInput}
-                />
-                <ThemedText type="small">minutes before each shift</ThemedText>
+                {ALARM_OFFSET_OPTIONS.map((minutes) => (
+                  <Pressable
+                    key={minutes}
+                    onPress={() => handleAlarmOffsetChange(minutes)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${minutes} minutes before`}
+                    accessibilityState={{ selected: alarmOffset === minutes }}
+                    style={[styles.offsetChip, alarmOffset === minutes && styles.offsetChipActive]}>
+                    <ThemedText
+                      type="small"
+                      style={alarmOffset === minutes ? styles.offsetChipTextActive : undefined}>
+                      {minutes}m
+                    </ThemedText>
+                  </Pressable>
+                ))}
               </ThemedView>
               {CALENDAR_SYNC_SUPPORTED && (
                 <ThemedView style={styles.offsetRow}>
@@ -288,14 +312,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   offsetRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, flexWrap: 'wrap' },
-  offsetInput: {
-    backgroundColor: '#fff',
-    borderRadius: Spacing.one,
+  offsetChip: {
+    backgroundColor: '#e2e8f0',
+    borderRadius: 999,
     paddingHorizontal: Spacing.two,
-    paddingVertical: 4,
-    minWidth: 50,
-    textAlign: 'center',
+    paddingVertical: 6,
   },
+  offsetChipActive: { backgroundColor: '#0f172a' },
+  offsetChipTextActive: { color: '#fff' },
   syncButton: { alignSelf: 'flex-start' },
   webNotice: { fontStyle: Platform.OS === 'web' ? 'italic' : undefined },
   calendarLabel: { flexShrink: 1 },

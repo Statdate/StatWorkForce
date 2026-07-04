@@ -33,6 +33,8 @@ const CURRENT_USER_SELECT = {
   firstName: true,
   lastName: true,
   email: true,
+  title: true,
+  shiftPattern: true,
   isActive: true,
   hospital: { select: { name: true } },
   jobType: { select: { id: true, name: true } },

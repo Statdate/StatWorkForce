@@ -52,6 +52,9 @@ export type MeResponse = {
   lastName: string;
   accountType: string;
   badgeNumber: string;
+  jobType: { id: string; name: string } | null;
+  title: string | null;
+  shiftPattern: string | null;
   hospitalName: string;
   units: { id: string; name: string; type: string }[];
 };
