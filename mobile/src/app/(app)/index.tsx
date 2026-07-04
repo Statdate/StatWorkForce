@@ -5,6 +5,7 @@ import {
   getSchedule,
   getOpenShifts,
   signUpForShift,
+  ApiError,
   type ScheduleAssignment,
   type OpenShift,
 } from '@/lib/api';
@@ -12,6 +13,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScheduleCalendar } from '@/components/schedule-calendar';
 import { Spacing } from '@/constants/theme';
+
+function errorMessage(e: unknown) {
+  return e instanceof ApiError ? e.message : 'Something went wrong. Try again.';
+}
 
 function formatRange(startTime: string, endTime: string) {
   const start = new Date(startTime);
@@ -29,11 +34,18 @@ export default function ScheduleScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pendingShiftId, setPendingShiftId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
-    setAssignments(assignments);
-    setOpenShifts(shifts);
+    try {
+      const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
+      setAssignments(assignments);
+      setOpenShifts(shifts);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(errorMessage(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -48,9 +60,12 @@ export default function ScheduleScreen() {
 
   async function handleSignUp(shiftId: string) {
     setPendingShiftId(shiftId);
+    setActionError(null);
     try {
       await signUpForShift(shiftId);
       await load();
+    } catch (e) {
+      setActionError(errorMessage(e));
     } finally {
       setPendingShiftId(null);
     }
@@ -70,14 +85,31 @@ export default function ScheduleScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
-            <ScheduleCalendar
-              shifts={assignments.map((a) => ({
-                id: a.id,
-                startTime: a.shift.startTime,
-                endTime: a.shift.endTime,
-                unitName: a.shift.unit.name,
-              }))}
-            />
+            <>
+              {loadError && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText}>{loadError}</ThemedText>
+                  <Pressable onPress={load} style={styles.retryButton}>
+                    <ThemedText type="small" style={styles.retryText}>
+                      Retry
+                    </ThemedText>
+                  </Pressable>
+                </ThemedView>
+              )}
+              {actionError && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText}>{actionError}</ThemedText>
+                </ThemedView>
+              )}
+              <ScheduleCalendar
+                shifts={assignments.map((a) => ({
+                  id: a.id,
+                  startTime: a.shift.startTime,
+                  endTime: a.shift.endTime,
+                  unitName: a.shift.unit.name,
+                }))}
+              />
+            </>
           }
           renderSectionHeader={({ section }) => (
             <ThemedView type="background" style={styles.sectionHeader}>
@@ -152,6 +184,15 @@ const styles = StyleSheet.create({
   sectionHeader: { paddingVertical: Spacing.two },
   card: { borderRadius: Spacing.two, padding: Spacing.three, gap: 4, marginBottom: Spacing.two },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  errorCard: {
+    borderRadius: Spacing.two,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    gap: Spacing.one,
+  },
+  errorText: { color: '#dc2626' },
+  retryButton: { alignSelf: 'flex-start' },
+  retryText: { color: '#0f172a', fontWeight: '600', textDecorationLine: 'underline' },
   publishedBadge: {
     backgroundColor: '#059669',
     borderRadius: 999,

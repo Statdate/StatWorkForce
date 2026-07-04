@@ -6,6 +6,7 @@ import {
   requestTimeOff,
   withdrawTimeOffRequest,
   TIME_OFF_HOURS_OPTIONS,
+  ApiError,
   type TimeOffRequest,
   type TimeOffRequestType,
 } from '@/lib/api';
@@ -38,10 +39,17 @@ export default function TimeOffScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { requests } = await getTimeOffRequests();
-    setRequests(requests);
+    try {
+      const { requests } = await getTimeOffRequests();
+      setRequests(requests);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof ApiError ? error.message : 'Could not load your time off requests.');
+    }
   }, []);
 
   useEffect(() => {
@@ -72,9 +80,12 @@ export default function TimeOffScreen() {
 
   async function handleWithdraw(requestId: string) {
     setWithdrawingId(requestId);
+    setWithdrawError(null);
     try {
       await withdrawTimeOffRequest(requestId);
       await load();
+    } catch (error) {
+      setWithdrawError(error instanceof ApiError ? error.message : 'Could not withdraw the request.');
     } finally {
       setWithdrawingId(null);
     }
@@ -89,7 +100,20 @@ export default function TimeOffScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
-            <ThemedView type="backgroundElement" style={styles.formCard}>
+            <>
+              {(loadError || withdrawError) && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText}>{loadError ?? withdrawError}</ThemedText>
+                  {loadError && (
+                    <Pressable onPress={load} style={styles.actionButton}>
+                      <ThemedText type="small" style={styles.retryText}>
+                        Retry
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </ThemedView>
+              )}
+              <ThemedView type="backgroundElement" style={styles.formCard}>
               <ThemedText type="smallBold">Request time off</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 Need a shift released? Request time off instead of cancelling it yourself.
@@ -156,10 +180,11 @@ export default function TimeOffScreen() {
                   {formError}
                 </ThemedText>
               )}
-            </ThemedView>
+              </ThemedView>
+            </>
           }
           ListEmptyComponent={
-            !isLoading ? (
+            !isLoading && !loadError ? (
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No time off requests yet.
               </ThemedText>
@@ -210,6 +235,8 @@ const styles = StyleSheet.create({
   empty: { textAlign: 'center', marginTop: Spacing.six },
   actionButton: { alignSelf: 'flex-start', marginTop: Spacing.one },
   errorText: { color: '#dc2626' },
+  errorCard: { borderRadius: Spacing.two, padding: Spacing.three, gap: Spacing.one, marginBottom: Spacing.two },
+  retryText: { color: '#0f172a', fontWeight: '600', textDecorationLine: 'underline' },
   formCard: {
     borderRadius: Spacing.two,
     padding: Spacing.three,

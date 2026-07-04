@@ -3,7 +3,13 @@ import { FlatList, Pressable, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { getCredentials, uploadCredentialFile, getCredentialFileDataUri, type Credential } from '@/lib/api';
+import {
+  getCredentials,
+  uploadCredentialFile,
+  getCredentialFileDataUri,
+  ApiError,
+  type Credential,
+} from '@/lib/api';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -35,10 +41,16 @@ export default function CredentialsScreen() {
   const [uploadError, setUploadError] = useState<{ id: string; message: string } | null>(null);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<{ id: string; message: string } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const { credentials } = await getCredentials();
-    setCredentials(credentials);
+    try {
+      const { credentials } = await getCredentials();
+      setCredentials(credentials);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof ApiError ? error.message : 'Could not load your credentials.');
+    }
   }, []);
 
   useEffect(() => {
@@ -99,8 +111,20 @@ export default function CredentialsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            loadError ? (
+              <ThemedView type="backgroundElement" style={styles.errorCard}>
+                <ThemedText style={styles.errorText}>{loadError}</ThemedText>
+                <Pressable onPress={load} style={styles.retryButton}>
+                  <ThemedText type="small" style={styles.previewText}>
+                    Retry
+                  </ThemedText>
+                </Pressable>
+              </ThemedView>
+            ) : null
+          }
           ListEmptyComponent={
-            !isLoading ? (
+            !isLoading && !loadError ? (
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No credentials on file yet.
               </ThemedText>
@@ -201,4 +225,6 @@ const styles = StyleSheet.create({
   },
   previewText: { color: '#0f172a', fontWeight: '600' },
   errorText: { color: '#dc2626' },
+  errorCard: { borderRadius: Spacing.two, padding: Spacing.three, gap: Spacing.one, marginBottom: Spacing.two },
+  retryButton: { alignSelf: 'flex-start' },
 });
