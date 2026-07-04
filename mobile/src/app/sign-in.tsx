@@ -42,6 +42,7 @@ export default function SignInScreen() {
           <ThemedView type="backgroundElement" style={styles.form}>
             <TextInput
               placeholder="Badge number"
+              accessibilityLabel="Badge number"
               value={badgeNumber}
               onChangeText={setBadgeNumber}
               autoCapitalize="none"
@@ -51,6 +52,7 @@ export default function SignInScreen() {
             />
             <TextInput
               placeholder="Password"
+              accessibilityLabel="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -58,13 +60,16 @@ export default function SignInScreen() {
               style={styles.input}
             />
             {error && (
-              <ThemedText themeColor="text" style={styles.error}>
+              <ThemedText themeColor="text" style={styles.error} accessibilityRole="alert">
                 {error}
               </ThemedText>
             )}
             <Pressable
               onPress={handleSignIn}
               disabled={isSubmitting || !badgeNumber || !password}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in"
+              accessibilityState={{ disabled: isSubmitting || !badgeNumber || !password }}
               style={[styles.button, (isSubmitting || !badgeNumber || !password) && styles.buttonDisabled]}>
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />

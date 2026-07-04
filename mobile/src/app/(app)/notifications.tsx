@@ -44,8 +44,14 @@ export default function NotificationsScreen() {
           ListHeaderComponent={
             loadError ? (
               <ThemedView type="backgroundElement" style={styles.errorCard}>
-                <ThemedText style={styles.errorText}>{loadError}</ThemedText>
-                <Pressable onPress={load} style={styles.retryButton}>
+                <ThemedText style={styles.errorText} accessibilityRole="alert">
+                  {loadError}
+                </ThemedText>
+                <Pressable
+                  onPress={load}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry"
+                  style={styles.retryButton}>
                   <ThemedText type="small" style={styles.retryText}>
                     Retry
                   </ThemedText>

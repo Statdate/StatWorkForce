@@ -88,8 +88,14 @@ export default function ScheduleScreen() {
             <>
               {loadError && (
                 <ThemedView type="backgroundElement" style={styles.errorCard}>
-                  <ThemedText style={styles.errorText}>{loadError}</ThemedText>
-                  <Pressable onPress={load} style={styles.retryButton}>
+                  <ThemedText style={styles.errorText} accessibilityRole="alert">
+                    {loadError}
+                  </ThemedText>
+                  <Pressable
+                    onPress={load}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry"
+                    style={styles.retryButton}>
                     <ThemedText type="small" style={styles.retryText}>
                       Retry
                     </ThemedText>
@@ -98,7 +104,9 @@ export default function ScheduleScreen() {
               )}
               {actionError && (
                 <ThemedView type="backgroundElement" style={styles.errorCard}>
-                  <ThemedText style={styles.errorText}>{actionError}</ThemedText>
+                  <ThemedText style={styles.errorText} accessibilityRole="alert">
+                    {actionError}
+                  </ThemedText>
                 </ThemedView>
               )}
               <ScheduleCalendar
@@ -163,6 +171,9 @@ export default function ScheduleScreen() {
                 <Pressable
                   onPress={() => handleSignUp(shift.id)}
                   disabled={pendingShiftId === shift.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Sign up for ${shift.unit.name} shift, ${formatRange(shift.startTime, shift.endTime)}`}
+                  accessibilityState={{ disabled: pendingShiftId === shift.id }}
                   style={[styles.actionButton, styles.signUpButton]}>
                   <ThemedText type="small" style={styles.signUpText}>
                     {pendingShiftId === shift.id ? 'Signing up…' : 'Sign up'}

@@ -124,6 +124,9 @@ export default function TimeOffScreen() {
                   <Pressable
                     key={option.value}
                     onPress={() => setType(option.value)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={option.label}
+                    accessibilityState={{ selected: type === option.value }}
                     style={[styles.typeChip, type === option.value && styles.typeChipActive]}>
                     <ThemedText
                       type="small"
@@ -140,6 +143,9 @@ export default function TimeOffScreen() {
                   <Pressable
                     key={option}
                     onPress={() => setHours(option)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${option} hours`}
+                    accessibilityState={{ selected: hours === option }}
                     style={[styles.typeChip, hours === option && styles.typeChipActive]}>
                     <ThemedText
                       type="small"
@@ -155,6 +161,7 @@ export default function TimeOffScreen() {
                 value={startDate}
                 onChangeText={setStartDate}
                 placeholder="2026-07-04"
+                accessibilityLabel="Start date, year-month-day"
                 style={styles.input}
               />
               <ThemedText type="small">End date (YYYY-MM-DD)</ThemedText>
@@ -162,21 +169,30 @@ export default function TimeOffScreen() {
                 value={endDate}
                 onChangeText={setEndDate}
                 placeholder="2026-07-04"
+                accessibilityLabel="End date, year-month-day"
                 style={styles.input}
               />
               <ThemedText type="small">Reason (optional)</ThemedText>
-              <TextInput value={reason} onChangeText={setReason} style={styles.input} />
+              <TextInput
+                value={reason}
+                onChangeText={setReason}
+                accessibilityLabel="Reason, optional"
+                style={styles.input}
+              />
 
               <Pressable
                 onPress={handleSubmit}
                 disabled={isSubmitting || !startDate || !endDate}
+                accessibilityRole="button"
+                accessibilityLabel="Submit request"
+                accessibilityState={{ disabled: isSubmitting || !startDate || !endDate }}
                 style={styles.submitButton}>
                 <ThemedText type="small" style={styles.submitText}>
                   {isSubmitting ? 'Submitting…' : 'Submit request'}
                 </ThemedText>
               </Pressable>
               {formError && (
-                <ThemedText type="small" style={styles.errorText}>
+                <ThemedText type="small" style={styles.errorText} accessibilityRole="alert">
                   {formError}
                 </ThemedText>
               )}
@@ -212,6 +228,9 @@ export default function TimeOffScreen() {
                   <Pressable
                     onPress={() => handleWithdraw(item.id)}
                     disabled={withdrawingId === item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Withdraw ${typeLabel} request`}
+                    accessibilityState={{ disabled: withdrawingId === item.id }}
                     style={styles.actionButton}>
                     <ThemedText type="small" style={styles.errorText}>
                       {withdrawingId === item.id ? 'Withdrawing…' : 'Withdraw'}

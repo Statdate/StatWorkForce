@@ -114,8 +114,14 @@ export default function CredentialsScreen() {
           ListHeaderComponent={
             loadError ? (
               <ThemedView type="backgroundElement" style={styles.errorCard}>
-                <ThemedText style={styles.errorText}>{loadError}</ThemedText>
-                <Pressable onPress={load} style={styles.retryButton}>
+                <ThemedText style={styles.errorText} accessibilityRole="alert">
+                  {loadError}
+                </ThemedText>
+                <Pressable
+                  onPress={load}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry"
+                  style={styles.retryButton}>
                   <ThemedText type="small" style={styles.previewText}>
                     Retry
                   </ThemedText>
@@ -162,6 +168,9 @@ export default function CredentialsScreen() {
                     <Pressable
                       onPress={() => handlePreview(item.id)}
                       disabled={isPreviewing}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Preview document for ${item.customName ?? item.type.replaceAll('_', ' ')}`}
+                      accessibilityState={{ disabled: isPreviewing }}
                       style={styles.previewButton}>
                       <ThemedText type="small" style={styles.previewText}>
                         {isPreviewing ? 'Opening…' : 'Preview'}
@@ -171,6 +180,13 @@ export default function CredentialsScreen() {
                   <Pressable
                     onPress={() => handleUpload(item.id)}
                     disabled={isUploading}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      item.fileName
+                        ? `Replace document for ${item.customName ?? item.type.replaceAll('_', ' ')}`
+                        : `Upload document for ${item.customName ?? item.type.replaceAll('_', ' ')}`
+                    }
+                    accessibilityState={{ disabled: isUploading }}
                     style={styles.uploadButton}>
                     <ThemedText type="small" style={styles.uploadText}>
                       {isUploading
