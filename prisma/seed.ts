@@ -66,32 +66,58 @@ async function main() {
 
   const admin = await prisma.user.upsert({
     where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: "10001" } },
-    update: {},
+    update: { firstName: "Kaiser", lastName: "" },
     create: {
       hospitalId: hospital.id,
       accountType: "ADMIN",
       badgeNumber: "10001",
       passwordHash,
-      firstName: "Alex",
-      lastName: "Admin",
+      firstName: "Kaiser",
+      lastName: "",
       email: "admin@statworkforce.test",
     },
   });
 
   const manager = await prisma.user.upsert({
     where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: "20001" } },
-    update: {},
+    update: { firstName: "Angela", lastName: "Allen" },
     create: {
       hospitalId: hospital.id,
       accountType: "MANAGER",
       badgeNumber: "20001",
       passwordHash,
-      firstName: "Morgan",
-      lastName: "Manager",
+      firstName: "Angela",
+      lastName: "Allen",
       email: "manager@statworkforce.test",
       jobTypeId: rnJobType.id,
     },
   });
+
+  // Assistant managers — same MANAGER accountType and unit as the manager
+  // above; there's no separate "assistant" role in the schema yet, so this
+  // is two more full MANAGER accounts co-assigned to ICU.
+  const assistantManagerSeeds = [
+    { badgeNumber: "20002", firstName: "Brian", lastName: "Yu" },
+    { badgeNumber: "20003", firstName: "Elline", lastName: "Williams" },
+  ];
+  const assistantManagers = await Promise.all(
+    assistantManagerSeeds.map((m) =>
+      prisma.user.upsert({
+        where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: m.badgeNumber } },
+        update: { firstName: m.firstName, lastName: m.lastName },
+        create: {
+          hospitalId: hospital.id,
+          accountType: "MANAGER",
+          badgeNumber: m.badgeNumber,
+          passwordHash,
+          firstName: m.firstName,
+          lastName: m.lastName,
+          email: `${m.firstName.toLowerCase()}@statworkforce.test`,
+          jobTypeId: rnJobType.id,
+        },
+      })
+    )
+  );
 
   const workerSeeds = [
     { badgeNumber: "30001", firstName: "Jamie", lastName: "Nurse" },
@@ -119,12 +145,16 @@ async function main() {
     )
   );
 
-  // Manager assigned to ICU (their scoped unit).
-  await prisma.unitMembership.upsert({
-    where: { userId_unitId: { userId: manager.id, unitId: icu.id } },
-    update: {},
-    create: { userId: manager.id, unitId: icu.id, isPrimary: true },
-  });
+  // Manager + assistant managers all assigned to ICU (their scoped unit).
+  await Promise.all(
+    [manager, ...assistantManagers].map((m) =>
+      prisma.unitMembership.upsert({
+        where: { userId_unitId: { userId: m.id, unitId: icu.id } },
+        update: {},
+        create: { userId: m.id, unitId: icu.id, isPrimary: true },
+      })
+    )
+  );
 
   const priorityTiers = await Promise.all(
     [
@@ -263,6 +293,9 @@ async function main() {
   console.log(`Login for every seeded user: password "${SEED_PASSWORD}"`);
   console.log(`  Admin   — badge ${admin.badgeNumber}`);
   console.log(`  Manager — badge ${manager.badgeNumber} (ICU)`);
+  assistantManagers.forEach((m) =>
+    console.log(`  Asst Mgr— badge ${m.badgeNumber} (${m.firstName} ${m.lastName}, ICU)`)
+  );
   workers.forEach((w) => console.log(`  Worker  — badge ${w.badgeNumber} (${w.firstName} ${w.lastName})`));
 }
 
