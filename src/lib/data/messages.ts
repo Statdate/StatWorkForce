@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireRole, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 
-type ThreadPartner = { id: string; firstName: string; lastName: string };
+type ThreadPartner = { id: string; firstName: string; lastName: string; title: string | null };
 
 /** Manager<->worker messaging only (per spec: managers message "their staff").
  * Both directions require the pair to share a unit. Takes an already-resolved
@@ -92,7 +92,7 @@ export async function getMessageThreadsForUser(user: CurrentUser) {
   const partnerAccountType = user.accountType === "MANAGER" ? "WORKER" : "MANAGER";
   const memberships = await prisma.unitMembership.findMany({
     where: { unitId: { in: unitIds }, user: { accountType: partnerAccountType } },
-    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+    include: { user: { select: { id: true, firstName: true, lastName: true, title: true } } },
     distinct: ["userId"],
   });
 
@@ -111,7 +111,7 @@ export async function getUnitMessageThreads(unitId: string) {
 
   const memberships = await prisma.unitMembership.findMany({
     where: { unitId, user: { accountType: "WORKER" } },
-    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+    include: { user: { select: { id: true, firstName: true, lastName: true, title: true } } },
     distinct: ["userId"],
   });
 

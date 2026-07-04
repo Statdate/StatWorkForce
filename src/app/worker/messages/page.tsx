@@ -21,8 +21,11 @@ export default async function WorkerMessagesPage() {
             href={`/worker/messages/${manager.id}`}
             className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"
           >
-            <span className="font-medium text-slate-900">
-              {manager.firstName} {manager.lastName}
+            <span>
+              <span className="font-medium text-slate-900">
+                {manager.firstName} {manager.lastName}
+              </span>
+              {manager.title && <span className="ml-2 text-xs text-slate-400">{manager.title}</span>}
             </span>
             {manager.unreadCount > 0 && (
               <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-medium text-white">

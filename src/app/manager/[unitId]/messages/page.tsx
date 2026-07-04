@@ -29,8 +29,11 @@ export default async function ManagerMessagesPage({
             href={`/manager/${unitId}/messages/${worker.id}`}
             className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300"
           >
-            <span className="font-medium text-slate-900">
-              {worker.firstName} {worker.lastName}
+            <span>
+              <span className="font-medium text-slate-900">
+                {worker.firstName} {worker.lastName}
+              </span>
+              {worker.title && <span className="ml-2 text-xs text-slate-400">{worker.title}</span>}
             </span>
             {worker.unreadCount > 0 && (
               <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-medium text-white">

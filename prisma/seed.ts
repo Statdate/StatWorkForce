@@ -16,14 +16,26 @@ const JOB_TYPES = [
   { name: "Unit Clerk", category: "Support" },
 ];
 
-const UNITS: { name: string; type: "ICU" | "MED_SURG" | "ED" | "PACU" | "LABOR_DELIVERY" | "OR" | "NICU" }[] = [
+const UNITS: {
+  name: string;
+  type: "ICU" | "MED_SURG" | "ED" | "PACU" | "PRE_OP" | "LABOR_DELIVERY" | "OR" | "NICU" | "OTHER";
+}[] = [
   { name: "ICU", type: "ICU" },
   { name: "Med-Surg", type: "MED_SURG" },
   { name: "Emergency Department", type: "ED" },
-  { name: "PACU", type: "PACU" },
   { name: "Labor & Delivery", type: "LABOR_DELIVERY" },
   { name: "OR", type: "OR" },
   { name: "NICU", type: "NICU" },
+  // Pre-op / PACU service line — Angela Allen's actual org (see her ADA title
+  // below). PACU is split into three named sub-units rather than one generic
+  // "PACU" because each is staffed to a different headcount; PACU C has no
+  // dedicated shifts of its own — it draws staffing from PACU A's pool.
+  { name: "Pre-op", type: "PRE_OP" },
+  { name: "PACU A", type: "PACU" },
+  { name: "PACU B", type: "PACU" },
+  { name: "PACU C", type: "PACU" },
+  { name: "Bronch", type: "OTHER" },
+  { name: "GI", type: "OTHER" },
 ];
 
 function daysFromNow(days: number) {
@@ -41,8 +53,8 @@ async function main() {
 
   const hospital = await prisma.hospital.upsert({
     where: { id: "seed-hospital" },
-    update: {},
-    create: { id: "seed-hospital", name: "Riverside General Hospital" },
+    update: { name: "Kaiser Los Angeles Medical Center" },
+    create: { id: "seed-hospital", name: "Kaiser Los Angeles Medical Center" },
   });
 
   const jobTypes = await Promise.all(
@@ -52,17 +64,26 @@ async function main() {
   );
   const rnJobType = jobTypes.find((jt) => jt.name === "RN")!;
 
-  const units = await Promise.all(
-    UNITS.map((unit) =>
-      prisma.unit.upsert({
+  // Sequential, not Promise.all: the local dev proxy's connection pool can't
+  // reliably handle this many concurrent upsert transactions at once.
+  const units = [];
+  for (const unit of UNITS) {
+    units.push(
+      await prisma.unit.upsert({
         where: { hospitalId_name: { hospitalId: hospital.id, name: unit.name } },
         update: {},
         create: { hospitalId: hospital.id, name: unit.name, type: unit.type },
       })
-    )
-  );
+    );
+  }
   const icu = units.find((u) => u.name === "ICU")!;
   const edUnit = units.find((u) => u.name === "Emergency Department")!;
+  const preOp = units.find((u) => u.name === "Pre-op")!;
+  const pacuA = units.find((u) => u.name === "PACU A")!;
+  const pacuB = units.find((u) => u.name === "PACU B")!;
+  const pacuC = units.find((u) => u.name === "PACU C")!;
+  const bronch = units.find((u) => u.name === "Bronch")!;
+  const gi = units.find((u) => u.name === "GI")!;
 
   const admin = await prisma.user.upsert({
     where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: "10001" } },
@@ -80,7 +101,7 @@ async function main() {
 
   const manager = await prisma.user.upsert({
     where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: "20001" } },
-    update: { firstName: "Angela", lastName: "Allen" },
+    update: { firstName: "Angela", lastName: "Allen", title: "ADA" },
     create: {
       hospitalId: hospital.id,
       accountType: "MANAGER",
@@ -88,6 +109,7 @@ async function main() {
       passwordHash,
       firstName: "Angela",
       lastName: "Allen",
+      title: "ADA",
       email: "manager@statworkforce.test",
       jobTypeId: rnJobType.id,
     },
@@ -95,7 +117,8 @@ async function main() {
 
   // Assistant managers — same MANAGER accountType and unit as the manager
   // above; there's no separate "assistant" role in the schema yet, so this
-  // is two more full MANAGER accounts co-assigned to ICU.
+  // is two more full MANAGER accounts co-assigned to ICU plus Angela's
+  // Pre-op/PACU org (see unit memberships below).
   const assistantManagerSeeds = [
     { badgeNumber: "20002", firstName: "Brian", lastName: "Yu" },
     { badgeNumber: "20003", firstName: "Elline", lastName: "Williams" },
@@ -104,9 +127,10 @@ async function main() {
     assistantManagerSeeds.map((m) =>
       prisma.user.upsert({
         where: { hospitalId_badgeNumber: { hospitalId: hospital.id, badgeNumber: m.badgeNumber } },
-        update: { firstName: m.firstName, lastName: m.lastName },
+        update: { firstName: m.firstName, lastName: m.lastName, title: "Assistant ADA" },
         create: {
           hospitalId: hospital.id,
+          title: "Assistant ADA",
           accountType: "MANAGER",
           badgeNumber: m.badgeNumber,
           passwordHash,
@@ -155,6 +179,78 @@ async function main() {
       })
     )
   );
+
+  // Angela's real org: ADA over Pre-op + all three PACU sub-units, plus she
+  // staffs the Bronch and GI sub-departments directly. Brian/Elline (assistant
+  // ADAs) share the Pre-op/PACU scope but not the sub-departments — additive
+  // alongside their ICU membership above, not a replacement for it. Sequential
+  // (not Promise.all) for the same connection-pool reason as the units loop.
+  for (const m of [manager, ...assistantManagers]) {
+    for (const unit of [preOp, pacuA, pacuB, pacuC]) {
+      await prisma.unitMembership.upsert({
+        where: { userId_unitId: { userId: m.id, unitId: unit.id } },
+        update: {},
+        create: { userId: m.id, unitId: unit.id, isPrimary: false },
+      });
+    }
+  }
+  for (const unit of [bronch, gi]) {
+    await prisma.unitMembership.upsert({
+      where: { userId_unitId: { userId: manager.id, unitId: unit.id } },
+      update: {},
+      create: { userId: manager.id, unitId: unit.id, isPrimary: false },
+    });
+  }
+
+  // PACU A/B staffing: A needs 14 nurses M-F, B needs 4 — one shift per
+  // weekday over the next two weeks, same 12-hour pattern as ICU's shifts
+  // (no specific hours were given for these, so this mirrors the existing
+  // convention rather than guessing at something more specific). PACU C
+  // deliberately has no shifts of its own — it draws staffing from PACU A.
+  const pacuSchedulePeriod = await prisma.schedulePeriod.upsert({
+    where: {
+      unitId_startDate_endDate: {
+        unitId: pacuA.id,
+        startDate: daysFromNow(0),
+        endDate: daysFromNow(14),
+      },
+    },
+    update: {},
+    create: {
+      unitId: pacuA.id,
+      startDate: daysFromNow(0),
+      endDate: daysFromNow(14),
+      status: "DRAFT",
+    },
+  });
+  for (let day = 1; day <= 10; day++) {
+    if (shiftTimeOnDay(day, 7).getDay() === 0 || shiftTimeOnDay(day, 7).getDay() === 6) continue; // M-F only
+    await prisma.shift.upsert({
+      where: { id: `seed-pacu-a-shift-day-${day}` },
+      update: {},
+      create: {
+        id: `seed-pacu-a-shift-day-${day}`,
+        unitId: pacuA.id,
+        schedulePeriodId: pacuSchedulePeriod.id,
+        jobTypeId: rnJobType.id,
+        startTime: shiftTimeOnDay(day, 7),
+        endTime: shiftTimeOnDay(day, 19),
+        requiredCount: 14,
+      },
+    });
+    await prisma.shift.upsert({
+      where: { id: `seed-pacu-b-shift-day-${day}` },
+      update: {},
+      create: {
+        id: `seed-pacu-b-shift-day-${day}`,
+        unitId: pacuB.id,
+        jobTypeId: rnJobType.id,
+        startTime: shiftTimeOnDay(day, 7),
+        endTime: shiftTimeOnDay(day, 19),
+        requiredCount: 4,
+      },
+    });
+  }
 
   const priorityTiers = await Promise.all(
     [

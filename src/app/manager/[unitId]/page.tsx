@@ -391,8 +391,10 @@ export default async function ManagerUnitPage({
                 )}
               </div>
               <p className="text-slate-500">
-                {membership.user.jobType?.name ?? "No job type set"} ·{" "}
-                {membership.user.accountType.toLowerCase()}
+                {[membership.user.title, membership.user.jobType?.name ?? "No job type set"]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
+                · {membership.user.accountType.toLowerCase()}
               </p>
               {membership.priorityGroup && (
                 <p className="mt-1 text-xs text-slate-400">

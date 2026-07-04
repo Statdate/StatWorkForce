@@ -257,6 +257,7 @@ export type MessageThread = {
   id: string;
   firstName: string;
   lastName: string;
+  title: string | null;
   unreadCount: number;
 };
 

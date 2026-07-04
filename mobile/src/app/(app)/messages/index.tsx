@@ -52,9 +52,16 @@ export default function MessageThreadsScreen() {
                 })
               }>
               <ThemedView type="backgroundElement" style={styles.card}>
-                <ThemedText type="smallBold">
-                  {item.firstName} {item.lastName}
-                </ThemedText>
+                <ThemedView style={styles.nameColumn}>
+                  <ThemedText type="smallBold">
+                    {item.firstName} {item.lastName}
+                  </ThemedText>
+                  {item.title && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {item.title}
+                    </ThemedText>
+                  )}
+                </ThemedView>
                 {item.unreadCount > 0 && (
                   <ThemedView style={styles.badge}>
                     <ThemedText type="small" style={styles.badgeText}>
@@ -84,6 +91,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   empty: { textAlign: 'center', marginTop: Spacing.six },
+  nameColumn: { backgroundColor: 'transparent', gap: 2 },
   badge: { backgroundColor: '#0f172a', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   badgeText: { color: '#fff' },
 });

@@ -139,7 +139,7 @@ export async function getUnitStaff(unitId: string) {
     where: { unitId },
     include: {
       user: {
-        select: { id: true, firstName: true, lastName: true, accountType: true, jobType: true },
+        select: { id: true, firstName: true, lastName: true, accountType: true, jobType: true, title: true },
       },
       priorityGroup: true,
     },
