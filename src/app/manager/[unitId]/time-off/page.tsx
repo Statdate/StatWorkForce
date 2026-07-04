@@ -69,7 +69,7 @@ export default async function ManagerTimeOffPage({
               </p>
               <p className="text-sm text-slate-500">
                 {TIME_OFF_TYPE_LABELS[request.type]} · {request.startDate.toLocaleDateString()} –{" "}
-                {request.endDate.toLocaleDateString()}
+                {request.endDate.toLocaleDateString()} · {request.hours} hours
               </p>
               {request.reason && <p className="text-xs text-slate-400">{request.reason}</p>}
             </div>

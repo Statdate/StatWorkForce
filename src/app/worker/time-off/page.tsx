@@ -1,7 +1,12 @@
 import { getCurrentUser } from "@/lib/dal";
 import { getMyTimeOffRequests } from "@/lib/data/worker";
 import { requestTimeOffAction, withdrawTimeOffRequestAction } from "@/app/actions/timeoff";
-import { TIME_OFF_TYPE_OPTIONS, TIME_OFF_TYPE_LABELS, timeOffStatusStyle } from "@/lib/timeoff-types";
+import {
+  TIME_OFF_TYPE_OPTIONS,
+  TIME_OFF_TYPE_LABELS,
+  TIME_OFF_HOURS_OPTIONS,
+  timeOffStatusStyle,
+} from "@/lib/timeoff-types";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { WorkerNav } from "@/components/worker-nav";
 
@@ -29,7 +34,8 @@ export default async function WorkerTimeOffPage() {
               <div>
                 <p className="font-medium text-slate-900">{TIME_OFF_TYPE_LABELS[request.type]}</p>
                 <p className="text-sm text-slate-500">
-                  {request.startDate.toLocaleDateString()} – {request.endDate.toLocaleDateString()}
+                  {request.startDate.toLocaleDateString()} – {request.endDate.toLocaleDateString()}{" "}
+                  · {request.hours} hours
                 </p>
                 {request.reason && <p className="text-xs text-slate-400">{request.reason}</p>}
               </div>
@@ -78,7 +84,22 @@ export default async function WorkerTimeOffPage() {
               ))}
             </select>
           </label>
-          <div />
+          <label className="block text-sm">
+            <span className="text-slate-700">Hours requested</span>
+            <select
+              name="hours"
+              required
+              defaultValue="8"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            >
+              {TIME_OFF_HOURS_OPTIONS.map((hours) => (
+                <option key={hours} value={hours}>
+                  {hours} hours{hours === 8 ? " (full shift)" : ""}
+                  {hours === 24 ? " (full day)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block text-sm">
             <span className="text-slate-700">Start date</span>
             <input

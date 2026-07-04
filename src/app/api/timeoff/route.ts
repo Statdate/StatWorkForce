@@ -19,8 +19,8 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  if (!body?.type || !body?.startDate || !body?.endDate) {
-    return corsJson({ error: "type, startDate, and endDate are required" }, { status: 400 });
+  if (!body?.type || !body?.startDate || !body?.endDate || !body?.hours) {
+    return corsJson({ error: "type, startDate, endDate, and hours are required" }, { status: 400 });
   }
 
   try {
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
       type: body.type,
       startDate: body.startDate,
       endDate: body.endDate,
+      hours: body.hours,
       reason: body.reason ?? null,
     });
     return corsJson({ request: created });

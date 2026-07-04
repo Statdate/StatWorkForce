@@ -204,10 +204,14 @@ export type TimeOffRequest = {
   type: TimeOffRequestType;
   startDate: string;
   endDate: string;
+  hours: number;
   reason: string | null;
   status: TimeOffRequestStatus;
   requestedAt: string;
 };
+
+// Total hours for the whole request, not per-day.
+export const TIME_OFF_HOURS_OPTIONS = [2, 4, 6, 8, 10, 12, 16, 24] as const;
 
 export function getTimeOffRequests() {
   return request<{ requests: TimeOffRequest[] }>("/api/timeoff");
@@ -217,11 +221,12 @@ export function requestTimeOff(
   type: TimeOffRequestType,
   startDate: string,
   endDate: string,
+  hours: number,
   reason?: string
 ) {
   return request<{ request: TimeOffRequest }>("/api/timeoff", {
     method: "POST",
-    body: JSON.stringify({ type, startDate, endDate, reason }),
+    body: JSON.stringify({ type, startDate, endDate, hours, reason }),
   });
 }
 

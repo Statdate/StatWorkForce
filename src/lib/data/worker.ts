@@ -290,6 +290,7 @@ export type NewTimeOffRequestInput = {
   type: string;
   startDate: string;
   endDate: string;
+  hours: number;
   reason?: string | null;
 };
 
@@ -312,12 +313,18 @@ export async function requestTimeOffForUser(userId: string, input: NewTimeOffReq
     throw new Error("End date can't be before the start date.");
   }
 
+  const hours = Number(input.hours);
+  if (!Number.isInteger(hours) || hours <= 0 || hours > 999) {
+    throw new Error("Pick how many hours you're requesting.");
+  }
+
   return prisma.timeOffRequest.create({
     data: {
       userId,
       type: input.type as TimeOffType,
       startDate,
       endDate,
+      hours,
       reason: input.reason?.trim() || null,
     },
   });

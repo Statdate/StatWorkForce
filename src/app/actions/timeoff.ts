@@ -9,6 +9,7 @@ export async function requestTimeOffAction(formData: FormData) {
     type: String(formData.get("type")),
     startDate: String(formData.get("startDate")),
     endDate: String(formData.get("endDate")),
+    hours: Number(formData.get("hours")),
     reason: formData.get("reason")?.toString() ?? null,
   });
   revalidatePath("/worker/time-off");

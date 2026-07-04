@@ -5,6 +5,7 @@ import {
   getTimeOffRequests,
   requestTimeOff,
   withdrawTimeOffRequest,
+  TIME_OFF_HOURS_OPTIONS,
   type TimeOffRequest,
   type TimeOffRequestType,
 } from '@/lib/api';
@@ -30,6 +31,7 @@ export default function TimeOffScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [type, setType] = useState<TimeOffRequestType>('VACATION');
+  const [hours, setHours] = useState(8);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
@@ -56,7 +58,7 @@ export default function TimeOffScreen() {
     setFormError(null);
     setIsSubmitting(true);
     try {
-      await requestTimeOff(type, startDate, endDate, reason || undefined);
+      await requestTimeOff(type, startDate, endDate, hours, reason || undefined);
       setStartDate('');
       setEndDate('');
       setReason('');
@@ -103,6 +105,22 @@ export default function TimeOffScreen() {
                       type="small"
                       style={type === option.value ? styles.typeChipTextActive : undefined}>
                       {option.label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </ThemedView>
+
+              <ThemedText type="small">Hours requested</ThemedText>
+              <ThemedView style={styles.typeRow}>
+                {TIME_OFF_HOURS_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option}
+                    onPress={() => setHours(option)}
+                    style={[styles.typeChip, hours === option && styles.typeChipActive]}>
+                    <ThemedText
+                      type="small"
+                      style={hours === option ? styles.typeChipTextActive : undefined}>
+                      {option}h
                     </ThemedText>
                   </Pressable>
                 ))}
@@ -155,7 +173,7 @@ export default function TimeOffScreen() {
                 <ThemedText type="smallBold">{typeLabel}</ThemedText>
                 <ThemedText themeColor="textSecondary">
                   {new Date(item.startDate).toLocaleDateString()} –{' '}
-                  {new Date(item.endDate).toLocaleDateString()}
+                  {new Date(item.endDate).toLocaleDateString()} · {item.hours} hours
                 </ThemedText>
                 {item.reason && (
                   <ThemedText type="small" themeColor="textSecondary">

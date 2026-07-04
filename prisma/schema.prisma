@@ -309,6 +309,10 @@ model TimeOffRequest {
   type         TimeOffType
   startDate    DateTime
   endDate      DateTime
+  // Total hours being requested off (dropdown of common increments in the
+  // UI — 2/4/6/8/10/12/16/24). Not per-day: for a multi-day request this is
+  // the total, e.g. a partial-day sick call is 4, a single full shift is 8.
+  hours        Int                  @default(8)
   reason       String?
   status       TimeOffRequestStatus @default(PENDING)
   requestedAt  DateTime             @default(now())
