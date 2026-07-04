@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Stat Workforce",
-    "slug": "statworkforce",
+    "slug": "stat-workforce",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -57,6 +57,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "45674831-83dd-4357-ae2b-e06bff3902f3"
+      }
+    },
+    "owner": "stat-workforce"
   }
 }
