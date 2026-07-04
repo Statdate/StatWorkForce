@@ -10,6 +10,7 @@ import {
 } from '@/lib/api';
 import { syncAssignmentsToCalendar, listWritableCalendars, CALENDAR_SYNC_SUPPORTED, type PickableCalendar } from '@/lib/calendar';
 import { getAlarmOffsetMinutes, setAlarmOffsetMinutes, getSelectedCalendar, setSelectedCalendar } from '@/lib/settings';
+import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -25,6 +26,8 @@ type Section =
   | { key: 'open'; title: string; data: OpenShift[] };
 
 export default function ScheduleScreen() {
+  const { user } = useAuth();
+  const isWorker = user?.accountType === 'WORKER';
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +53,7 @@ export default function ScheduleScreen() {
 
   useEffect(() => {
     load().finally(() => setIsLoading(false));
+    if (!isWorker) return;
     getAlarmOffsetMinutes().then((minutes) => setAlarmOffsetState(String(minutes)));
     getSelectedCalendar().then((selection) => {
       if (selection) {
@@ -57,7 +61,7 @@ export default function ScheduleScreen() {
         setCalendarLabel(selection.label);
       }
     });
-  }, [load]);
+  }, [load, isWorker]);
 
   async function onRefresh() {
     setIsRefreshing(true);
@@ -142,6 +146,7 @@ export default function ScheduleScreen() {
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
+            isWorker ? (
             <ThemedView type="backgroundElement" style={styles.syncCard}>
               <ThemedText type="smallBold">Calendar sync</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
@@ -188,6 +193,7 @@ export default function ScheduleScreen() {
                 </ThemedText>
               )}
             </ThemedView>
+            ) : null
           }
           renderSectionHeader={({ section }) => (
             <ThemedView type="background" style={styles.sectionHeader}>
