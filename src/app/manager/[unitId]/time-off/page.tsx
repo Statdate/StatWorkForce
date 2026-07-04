@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
-import { getManagerUnits, getUnitTimeOffRequests } from "@/lib/data/manager";
+import { getManagerUnits, getUnitTimeOffRequestsForManager } from "@/lib/data/manager";
 import { reviewTimeOffRequestAction } from "@/app/actions/timeoff";
 import { TIME_OFF_TYPE_LABELS, timeOffStatusStyle } from "@/lib/timeoff-types";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -21,23 +21,28 @@ export default async function ManagerTimeOffPage({
     notFound();
   }
 
-  const [user, requests, { error }] = await Promise.all([
-    getCurrentUser(),
-    getUnitTimeOffRequests(unitId),
-    searchParams,
-  ]);
+  const [user, { error }] = await Promise.all([getCurrentUser(), searchParams]);
+
+  // Spans every unit the manager is over, not just the one in the URL —
+  // Angela (ADA over Pre-op/PACU A/B/C/Bronch/GI) needs one combined queue,
+  // not six separate ones she'd have to click through individually.
+  const requests = await getUnitTimeOffRequestsForManager(user);
 
   const pending = requests.filter((r) => r.status === "PENDING");
   const decided = requests.filter((r) => r.status !== "PENDING");
+
+  function unitNamesFor(request: (typeof requests)[number]) {
+    return request.user.unitMemberships.map((m) => m.unit.name).join(", ") || "—";
+  }
 
   const nav = <ManagerNav unitId={unitId} active="time-off" />;
 
   return (
     <DashboardShell roleLabel="Manager" userName={`${user.firstName} ${user.lastName}`} nav={nav}>
-      <h1 className="text-2xl font-semibold text-slate-900">{activeUnit.name} — time off requests</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Time off requests — all units</h1>
       <p className="mt-1 text-sm text-slate-500">
-        Approving releases any of the worker&apos;s shifts inside that date range back to open
-        shifts.
+        Every unit you&apos;re over. Approving releases any of the worker&apos;s shifts inside that
+        date range back to open shifts.
       </p>
 
       <div className="mt-4">
@@ -55,6 +60,8 @@ export default async function ManagerTimeOffPage({
               <p className="font-medium text-slate-900">
                 {request.user.firstName} {request.user.lastName}{" "}
                 <span className="text-xs font-normal text-slate-400">#{request.user.badgeNumber}</span>
+                {" · "}
+                <span className="text-xs font-normal text-slate-400">{unitNamesFor(request)}</span>
               </p>
               <p className="text-sm text-slate-500">
                 {TIME_OFF_TYPE_LABELS[request.type]} · {request.startDate.toLocaleDateString()} –{" "}
@@ -110,6 +117,8 @@ export default async function ManagerTimeOffPage({
                       <span className="text-xs font-normal text-slate-400">
                         #{request.user.badgeNumber}
                       </span>
+                      {" · "}
+                      <span className="text-xs font-normal text-slate-400">{unitNamesFor(request)}</span>
                     </p>
                     <p className="text-sm text-slate-500">
                       {TIME_OFF_TYPE_LABELS[request.type]} · {request.startDate.toLocaleDateString()} –{" "}

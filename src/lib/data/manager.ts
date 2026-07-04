@@ -385,7 +385,20 @@ export async function getUnitTimeOffRequestsForManager(manager: CurrentUser, uni
   return prisma.timeOffRequest.findMany({
     where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId: { in: scoped } } } } },
     include: {
-      user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          badgeNumber: true,
+          // Scoped to the units in view so a worker who also belongs to a
+          // unit outside the manager's scope doesn't leak that unit's name.
+          unitMemberships: {
+            where: { unitId: { in: scoped } },
+            select: { unit: { select: { name: true } } },
+          },
+        },
+      },
       reviewedBy: { select: { firstName: true, lastName: true } },
     },
     orderBy: [{ status: "asc" }, { requestedAt: "desc" }],
