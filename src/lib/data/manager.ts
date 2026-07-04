@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole, scopedUnitIds } from "@/lib/dal";
+import { requireRole, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 import { sendPushToUser } from "@/lib/push";
 
 class ForbiddenUnitError extends Error {
@@ -19,6 +19,20 @@ async function assertUnitInScope(unitId: string) {
     throw new ForbiddenUnitError(unitId);
   }
   return user;
+}
+
+/** All unit IDs a manager/admin is scoped to — unlike scopedUnitIds(), never
+ * null: admins (unscoped) get every unit in their hospital. Mobile has no
+ * per-unit navigation like web's [unitId] pages, so its aggregated views
+ * need one concrete list to query across. */
+async function allScopedUnitIds(user: CurrentUser): Promise<string[]> {
+  const scoped = scopedUnitIds(user);
+  if (scoped !== null) return scoped;
+  const units = await prisma.unit.findMany({
+    where: { hospitalId: user.hospitalId },
+    select: { id: true },
+  });
+  return units.map((u) => u.id);
 }
 
 // getManagerUnits() backs the unit-switcher nav shown on every manager page
@@ -229,11 +243,21 @@ export async function getUnitStaff(unitId: string) {
  * first — the manager's "what needs attention" view. Workers with nothing on
  * file are listed separately so gaps are visible, not silent. */
 export async function getUnitCredentials(unitId: string) {
-  await assertUnitInScope(unitId);
+  const user = await assertUnitInScope(unitId);
+  return getUnitCredentialsForManager(user, [unitId]);
+}
+
+/** Same as getUnitCredentials(), but across every unit a manager/admin is
+ * scoped to (or the given subset) — mobile has no per-unit navigation like
+ * web's [unitId] pages, so its Credentials tab shows one combined
+ * expiration overview instead. */
+export async function getUnitCredentialsForManager(manager: CurrentUser, unitIds?: string[]) {
+  const scoped = unitIds ?? (await allScopedUnitIds(manager));
+  if (scoped.length === 0) return { credentials: [], workersWithoutCredentials: [] };
 
   const [credentials, workersWithoutCredentials] = await Promise.all([
     prisma.credential.findMany({
-      where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId } } } },
+      where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId: { in: scoped } } } } },
       omit: { fileData: true },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
@@ -243,7 +267,7 @@ export async function getUnitCredentials(unitId: string) {
     prisma.user.findMany({
       where: {
         accountType: "WORKER",
-        unitMemberships: { some: { unitId } },
+        unitMemberships: { some: { unitId: { in: scoped } } },
         credentials: { none: {} },
       },
       select: { id: true, firstName: true, lastName: true, badgeNumber: true },
@@ -258,18 +282,25 @@ export async function getUnitCredentials(unitId: string) {
  * manager's action queue. Requests already decided are included after, so
  * history is visible without a separate page. */
 export async function getUnitTimeOffRequests(unitId: string) {
-  await assertUnitInScope(unitId);
+  const user = await assertUnitInScope(unitId);
+  return getUnitTimeOffRequestsForManager(user, [unitId]);
+}
 
-  const requests = await prisma.timeOffRequest.findMany({
-    where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId } } } },
+/** Same as getUnitTimeOffRequests(), but across every unit a manager/admin is
+ * scoped to (or the given subset) — mobile's approval queue has no per-unit
+ * navigation like web's [unitId] pages, so it shows one combined queue. */
+export async function getUnitTimeOffRequestsForManager(manager: CurrentUser, unitIds?: string[]) {
+  const scoped = unitIds ?? (await allScopedUnitIds(manager));
+  if (scoped.length === 0) return [];
+
+  return prisma.timeOffRequest.findMany({
+    where: { user: { accountType: "WORKER", unitMemberships: { some: { unitId: { in: scoped } } } } },
     include: {
       user: { select: { id: true, firstName: true, lastName: true, badgeNumber: true } },
       reviewedBy: { select: { firstName: true, lastName: true } },
     },
     orderBy: [{ status: "asc" }, { requestedAt: "desc" }],
   });
-
-  return requests;
 }
 
 /** Approve or deny a worker's time-off request. On approval, any of that
@@ -281,6 +312,20 @@ export async function reviewTimeOffRequest(
   decision: "APPROVED" | "DENIED"
 ) {
   const manager = await requireRole("MANAGER", "ADMIN");
+  return reviewTimeOffRequestForManager(manager, requestId, decision);
+}
+
+/** Same as reviewTimeOffRequest(), but takes an already-resolved manager
+ * instead of calling requireRole() itself, so mobile's API route (which
+ * resolves the user from a Bearer token, not cookies) can call it. */
+export async function reviewTimeOffRequestForManager(
+  manager: CurrentUser,
+  requestId: string,
+  decision: "APPROVED" | "DENIED"
+) {
+  if (manager.accountType !== "MANAGER" && manager.accountType !== "ADMIN") {
+    throw new Error("Only managers can review time off requests");
+  }
   const allowedUnitIds = scopedUnitIds(manager);
 
   const request = await prisma.timeOffRequest.findUnique({

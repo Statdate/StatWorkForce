@@ -20,15 +20,19 @@ export default function AppTabsLayout() {
 
   return (
     <View style={styles.flex}>
-      {isWorker && (
-        <SafeAreaView edges={['top']}>
-          <HospitalBanner />
-        </SafeAreaView>
-      )}
+      <SafeAreaView edges={['top']}>
+        <HospitalBanner />
+      </SafeAreaView>
       <Tabs screenOptions={{ headerRight: () => <SignOutButton /> }}>
         <Tabs.Screen name="index" options={{ title: 'My Schedule' }} />
-        <Tabs.Screen name="time-off" options={{ title: 'Time Off' }} />
-        <Tabs.Screen name="credentials" options={{ title: 'My Credentials' }} />
+        <Tabs.Screen
+          name="time-off"
+          options={{ title: isWorker ? 'Time Off' : 'Time Off Requests' }}
+        />
+        <Tabs.Screen
+          name="credentials"
+          options={{ title: isWorker ? 'My Credentials' : 'Credential Expirations' }}
+        />
         <Tabs.Screen name="messages" options={{ title: 'Messages', headerShown: false }} />
         <Tabs.Screen name="notifications" options={{ title: 'Alerts' }} />
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />

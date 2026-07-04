@@ -331,4 +331,42 @@ export function withdrawTimeOffRequest(requestId: string) {
   });
 }
 
+export type ManagerTimeOffRequest = TimeOffRequest & {
+  user: { id: string; firstName: string; lastName: string; badgeNumber: string };
+  reviewedBy: { firstName: string; lastName: string } | null;
+};
+
+export function getManagerTimeOffQueue() {
+  return request<{ requests: ManagerTimeOffRequest[] }>("/api/manager/timeoff");
+}
+
+export function reviewTimeOffRequest(requestId: string, decision: "APPROVED" | "DENIED") {
+  return request<{ ok: true }>(`/api/manager/timeoff/${requestId}/review`, {
+    method: "POST",
+    body: JSON.stringify({ decision }),
+  });
+}
+
+export type ManagerCredential = {
+  id: string;
+  type: CredentialType;
+  customName: string | null;
+  expirationDate: string;
+  user: { id: string; firstName: string; lastName: string; badgeNumber: string };
+};
+
+export type ManagerCredentialWorker = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  badgeNumber: string;
+};
+
+export function getManagerCredentials() {
+  return request<{
+    credentials: ManagerCredential[];
+    workersWithoutCredentials: ManagerCredentialWorker[];
+  }>("/api/manager/credentials");
+}
+
 export { TOKEN_KEY };

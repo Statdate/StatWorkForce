@@ -5,11 +5,15 @@ import {
   getTimeOffRequests,
   requestTimeOff,
   withdrawTimeOffRequest,
+  getManagerTimeOffQueue,
+  reviewTimeOffRequest,
   TIME_OFF_HOURS_OPTIONS,
   ApiError,
   type TimeOffRequest,
   type TimeOffRequestType,
+  type ManagerTimeOffRequest,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateField } from '@/components/date-field';
@@ -28,7 +32,16 @@ function statusStyle(status: TimeOffRequest['status']) {
   return { label: 'Pending', color: '#d97706' };
 }
 
+/** Managers (ADA/assistant ADA) are salaried and don't submit time off
+ * requests for themselves through this app — they instead approve/deny
+ * their workers' requests, so the tab shows a queue instead of a form. */
 export default function TimeOffScreen() {
+  const { user } = useAuth();
+  const isWorker = user?.accountType === 'WORKER';
+  return isWorker ? <WorkerTimeOffView /> : <ManagerTimeOffQueue />;
+}
+
+function WorkerTimeOffView() {
   const [requests, setRequests] = useState<TimeOffRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -297,4 +310,194 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
   },
   submitText: { color: '#fff', fontWeight: '600' },
+});
+
+function ManagerTimeOffQueue() {
+  const [requests, setRequests] = useState<ManagerTimeOffRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [decideError, setDecideError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { requests } = await getManagerTimeOffQueue();
+      setRequests(requests);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof ApiError ? error.message : 'Could not load the approval queue.');
+    }
+  }, []);
+
+  useEffect(() => {
+    load().finally(() => setIsLoading(false));
+  }, [load]);
+
+  async function onRefresh() {
+    setIsRefreshing(true);
+    await load();
+    setIsRefreshing(false);
+  }
+
+  async function handleDecision(requestId: string, decision: 'APPROVED' | 'DENIED') {
+    setDecidingId(requestId);
+    setDecideError(null);
+    try {
+      await reviewTimeOffRequest(requestId, decision);
+      await load();
+    } catch (error) {
+      setDecideError(error instanceof ApiError ? error.message : 'Could not record that decision.');
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
+  const pending = requests.filter((r) => r.status === 'PENDING');
+  const decided = requests.filter((r) => r.status !== 'PENDING');
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+        <FlatList
+          data={decided}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            <>
+              {(loadError || decideError) && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText} accessibilityRole="alert">
+                    {loadError ?? decideError}
+                  </ThemedText>
+                  {loadError && (
+                    <Pressable
+                      onPress={load}
+                      accessibilityRole="button"
+                      accessibilityLabel="Retry"
+                      style={styles.actionButton}>
+                      <ThemedText type="small" style={styles.retryText}>
+                        Retry
+                      </ThemedText>
+                    </Pressable>
+                  )}
+                </ThemedView>
+              )}
+              <ThemedText type="smallBold">Pending</ThemedText>
+              <ThemedView style={managerStyles.pendingGroup}>
+                {pending.map((request) => (
+                  <ThemedView key={request.id} type="backgroundElement" style={styles.card}>
+                    <ThemedText type="smallBold">
+                      {request.user.firstName} {request.user.lastName}{' '}
+                      <ThemedText type="small" themeColor="textSecondary">
+                        #{request.user.badgeNumber}
+                      </ThemedText>
+                    </ThemedText>
+                    <ThemedText themeColor="textSecondary">
+                      {TYPE_LABELS[request.type]} · {new Date(request.startDate).toLocaleDateString()} –{' '}
+                      {new Date(request.endDate).toLocaleDateString()} · {request.hours} hours
+                    </ThemedText>
+                    {request.reason && (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {request.reason}
+                      </ThemedText>
+                    )}
+                    <ThemedView style={managerStyles.buttonRow}>
+                      <Pressable
+                        onPress={() => handleDecision(request.id, 'APPROVED')}
+                        disabled={decidingId === request.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Approve ${request.user.firstName} ${request.user.lastName}'s request`}
+                        accessibilityState={{ disabled: decidingId === request.id }}
+                        style={managerStyles.approveButton}>
+                        <ThemedText type="small" style={managerStyles.approveText}>
+                          {decidingId === request.id ? 'Saving…' : 'Approve'}
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleDecision(request.id, 'DENIED')}
+                        disabled={decidingId === request.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Deny ${request.user.firstName} ${request.user.lastName}'s request`}
+                        accessibilityState={{ disabled: decidingId === request.id }}
+                        style={managerStyles.denyButton}>
+                        <ThemedText type="small" style={managerStyles.denyText}>
+                          Deny
+                        </ThemedText>
+                      </Pressable>
+                    </ThemedView>
+                  </ThemedView>
+                ))}
+                {pending.length === 0 && (
+                  <ThemedText themeColor="textSecondary">No pending requests.</ThemedText>
+                )}
+              </ThemedView>
+              {decided.length > 0 && <ThemedText type="smallBold">Reviewed</ThemedText>}
+            </>
+          }
+          renderItem={({ item }) => {
+            const status = timeOffStatusStyle(item.status);
+            return (
+              <ThemedView type="backgroundElement" style={styles.card}>
+                <ThemedText type="smallBold">
+                  {item.user.firstName} {item.user.lastName}{' '}
+                  <ThemedText type="small" themeColor="textSecondary">
+                    #{item.user.badgeNumber}
+                  </ThemedText>
+                </ThemedText>
+                <ThemedText themeColor="textSecondary">
+                  {TYPE_LABELS[item.type]} · {new Date(item.startDate).toLocaleDateString()} –{' '}
+                  {new Date(item.endDate).toLocaleDateString()}
+                </ThemedText>
+                {item.reviewedBy && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Reviewed by {item.reviewedBy.firstName} {item.reviewedBy.lastName}
+                  </ThemedText>
+                )}
+                <ThemedText type="small" style={{ color: status.color }}>
+                  {status.label}
+                </ThemedText>
+              </ThemedView>
+            );
+          }}
+        />
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+const TYPE_LABELS: Record<TimeOffRequestType, string> = {
+  SICK: 'Sick',
+  VACATION: 'Vacation',
+  LIFE_BALANCE: 'Life Balance',
+  OTHER: 'Other',
+};
+
+function timeOffStatusStyle(status: TimeOffRequest['status']) {
+  if (status === 'APPROVED') return { label: 'Approved', color: '#059669' };
+  if (status === 'DENIED') return { label: 'Denied', color: '#dc2626' };
+  return { label: 'Pending', color: '#d97706' };
+}
+
+const managerStyles = StyleSheet.create({
+  pendingGroup: { gap: Spacing.two, marginTop: Spacing.two, marginBottom: Spacing.three },
+  buttonRow: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.one },
+  approveButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0f172a',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  approveText: { color: '#fff', fontWeight: '600' },
+  denyButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  denyText: { color: '#dc2626', fontWeight: '600' },
 });

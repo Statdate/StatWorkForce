@@ -169,17 +169,8 @@ async function main() {
     )
   );
 
-  // Manager + assistant managers all assigned to ICU (their scoped unit).
-  await Promise.all(
-    [manager, ...assistantManagers].map((m) =>
-      prisma.unitMembership.upsert({
-        where: { userId_unitId: { userId: m.id, unitId: icu.id } },
-        update: {},
-        create: { userId: m.id, unitId: icu.id, isPrimary: true },
-      })
-    )
-  );
-
+  // Angela/Brian/Elline are NOT ICU staff — ICU has its own workers seeded
+  // below with no manager of their own in this dataset. Their real org:
   // Angela's real org: ADA over Pre-op + all three PACU sub-units, plus she
   // staffs the Bronch and GI sub-departments directly. Brian/Elline (assistant
   // ADAs) share the Pre-op/PACU scope but not the sub-departments — additive

@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
  * One-time (idempotent) fixup for Angela Allen's real org structure — same
  * pattern and same CRON_SECRET as sync-seed-identities, split into its own
  * route since it's a distinct concern (org/unit structure vs. identity
- * renames). Safe to call more than once: every write here is an upsert.
+ * renames). Safe to call more than once: every write here is an upsert (or,
+ * for the ICU removal, a delete that's a no-op once already applied).
  *
  * Renames the hospital, creates the Pre-op/PACU A/B/C/Bronch/GI units if
- * they don't exist, assigns Angela (ADA) and Brian/Elline (assistant ADA)
- * to them alongside their existing ICU membership (additive, not a
- * replacement), and seeds PACU A/B's weekday staffing shifts for the next
- * two weeks if a schedule period for that span doesn't already exist.
+ * they don't exist, assigns Angela (ADA) and Brian/Elline (assistant ADA) to
+ * them, removes their ICU membership (they aren't ICU staff), and seeds
+ * PACU A/B's weekday staffing shifts for the next two weeks if a schedule
+ * period for that span doesn't already exist.
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -73,6 +74,20 @@ export async function POST(request: Request) {
     });
   }
 
+  // Not ICU staff — remove any ICU membership left over from the earlier
+  // (incorrect) assumption that they should keep it alongside their real org.
+  const icuUnit = await prisma.unit.findFirst({ where: { hospitalId: hospital.id, name: "ICU" } });
+  let icuMembershipsRemoved = 0;
+  if (icuUnit) {
+    const removed = await prisma.unitMembership.deleteMany({
+      where: {
+        unitId: icuUnit.id,
+        userId: { in: [manager.id, ...assistantManagers.map((m) => m.id)] },
+      },
+    });
+    icuMembershipsRemoved = removed.count;
+  }
+
   const rnJobType = await prisma.jobType.findFirst({ where: { name: "RN" } });
   const pacuA = units.get("PACU A")!;
   const pacuB = units.get("PACU B")!;
@@ -130,5 +145,6 @@ export async function POST(request: Request) {
     assistantManagers: assistantManagers.map((m) => ({ badgeNumber: m.badgeNumber, title: "Assistant ADA" })),
     units: unitSeeds.map((u) => u.name),
     shiftsCreated,
+    icuMembershipsRemoved,
   });
 }

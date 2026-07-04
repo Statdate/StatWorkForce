@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScheduleCalendar } from '@/components/schedule-calendar';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/lib/auth-context';
 
 function errorMessage(e: unknown) {
   return e instanceof ApiError ? e.message : 'Something went wrong. Try again.';
@@ -46,6 +47,8 @@ type Section =
   | { key: 'open'; title: string; data: OpenShift[] };
 
 export default function ScheduleScreen() {
+  const { user } = useAuth();
+  const isWorker = user?.accountType === 'WORKER';
   const [assignments, setAssignments] = useState<ScheduleAssignment[]>([]);
   const [openShifts, setOpenShifts] = useState<OpenShift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,14 +59,19 @@ export default function ScheduleScreen() {
 
   const load = useCallback(async () => {
     try {
-      const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
-      setAssignments(assignments);
-      setOpenShifts(shifts);
+      if (isWorker) {
+        const [{ assignments }, { shifts }] = await Promise.all([getSchedule(), getOpenShifts()]);
+        setAssignments(assignments);
+        setOpenShifts(shifts);
+      } else {
+        const { assignments } = await getSchedule();
+        setAssignments(assignments);
+      }
       setLoadError(null);
     } catch (e) {
       setLoadError(errorMessage(e));
     }
-  }, []);
+  }, [isWorker]);
 
   useEffect(() => {
     load().finally(() => setIsLoading(false));
@@ -88,10 +96,12 @@ export default function ScheduleScreen() {
     }
   }
 
-  const sections: Section[] = [
-    { key: 'mine', title: 'My Shifts', data: assignments },
-    { key: 'open', title: 'Open Shifts', data: openShifts },
-  ];
+  const sections: Section[] = isWorker
+    ? [
+        { key: 'mine', title: 'My Shifts', data: assignments },
+        { key: 'open', title: 'Open Shifts', data: openShifts },
+      ]
+    : [{ key: 'mine', title: 'My Shifts', data: assignments }];
 
   return (
     <ThemedView style={styles.container}>

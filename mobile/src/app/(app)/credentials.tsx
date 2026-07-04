@@ -8,11 +8,15 @@ import {
   addCredential,
   uploadCredentialFile,
   getCredentialFileDataUri,
+  getManagerCredentials,
   ApiError,
   CREDENTIAL_TYPE_OPTIONS,
   type Credential,
   type CredentialType,
+  type ManagerCredential,
+  type ManagerCredentialWorker,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { DateField } from '@/components/date-field';
@@ -37,7 +41,16 @@ function credentialStatus(expirationDate: string) {
   return { label: 'Current', color: '#059669' };
 }
 
+/** Managers (ADA/assistant ADA) don't hold their own clinical credentials
+ * through this tab — they instead need to see which of their workers'
+ * credentials are expiring, so the tab shows that overview instead. */
 export default function CredentialsScreen() {
+  const { user } = useAuth();
+  const isWorker = user?.accountType === 'WORKER';
+  return isWorker ? <WorkerCredentialsView /> : <ManagerCredentialExpirations />;
+}
+
+function WorkerCredentialsView() {
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -401,4 +414,113 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     marginBottom: Spacing.one,
   },
+});
+
+const CREDENTIAL_TYPE_LABELS = Object.fromEntries(
+  CREDENTIAL_TYPE_OPTIONS.map((o) => [o.value, o.label])
+) as Record<CredentialType, string>;
+
+function ManagerCredentialExpirations() {
+  const [credentials, setCredentials] = useState<ManagerCredential[]>([]);
+  const [workersWithoutCredentials, setWorkersWithoutCredentials] = useState<ManagerCredentialWorker[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { credentials, workersWithoutCredentials } = await getManagerCredentials();
+      setCredentials(credentials);
+      setWorkersWithoutCredentials(workersWithoutCredentials);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof ApiError ? error.message : 'Could not load unit credentials.');
+    }
+  }, []);
+
+  useEffect(() => {
+    load().finally(() => setIsLoading(false));
+  }, [load]);
+
+  async function onRefresh() {
+    setIsRefreshing(true);
+    await load();
+    setIsRefreshing(false);
+  }
+
+  return (
+    <ThemedView style={styles.container}>
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+        <FlatList
+          data={credentials}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={
+            <>
+              {loadError && (
+                <ThemedView type="backgroundElement" style={styles.errorCard}>
+                  <ThemedText style={styles.errorText} accessibilityRole="alert">
+                    {loadError}
+                  </ThemedText>
+                  <Pressable
+                    onPress={load}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry"
+                    style={styles.retryButton}>
+                    <ThemedText type="small" style={styles.previewText}>
+                      Retry
+                    </ThemedText>
+                  </Pressable>
+                </ThemedView>
+              )}
+              {workersWithoutCredentials.length > 0 && (
+                <ThemedView type="backgroundElement" style={managerCredStyles.gapCard}>
+                  <ThemedText type="smallBold">No credentials on file</ThemedText>
+                  {workersWithoutCredentials.map((worker) => (
+                    <ThemedText key={worker.id} themeColor="textSecondary">
+                      {worker.firstName} {worker.lastName} · #{worker.badgeNumber}
+                    </ThemedText>
+                  ))}
+                </ThemedView>
+              )}
+            </>
+          }
+          ListEmptyComponent={
+            !isLoading && !loadError ? (
+              <ThemedText themeColor="textSecondary" style={styles.empty}>
+                No credentials on file for your units yet.
+              </ThemedText>
+            ) : null
+          }
+          renderItem={({ item }) => {
+            const status = credentialStatus(item.expirationDate);
+            return (
+              <ThemedView type="backgroundElement" style={styles.card}>
+                <ThemedText type="smallBold">
+                  {item.user.firstName} {item.user.lastName}{' '}
+                  <ThemedText type="small" themeColor="textSecondary">
+                    #{item.user.badgeNumber}
+                  </ThemedText>
+                </ThemedText>
+                <ThemedText themeColor="textSecondary">
+                  {item.customName ?? CREDENTIAL_TYPE_LABELS[item.type] ?? item.type.replaceAll('_', ' ')}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Expires {new Date(item.expirationDate).toLocaleDateString()}
+                </ThemedText>
+                <ThemedText type="small" style={{ color: status.color }}>
+                  {status.label}
+                </ThemedText>
+              </ThemedView>
+            );
+          }}
+        />
+      </SafeAreaView>
+    </ThemedView>
+  );
+}
+
+const managerCredStyles = StyleSheet.create({
+  gapCard: { borderRadius: Spacing.two, padding: Spacing.three, gap: 4, marginBottom: Spacing.three },
 });

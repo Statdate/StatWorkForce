@@ -42,8 +42,12 @@ export async function getOpenShifts() {
 }
 
 /** Core logic split from getOpenShifts() — takes a resolved user (web's
- * getCurrentUser() or mobile's getApiUser()) instead of fetching it itself. */
+ * getCurrentUser() or mobile's getApiUser()) instead of fetching it itself.
+ * Managers/admins are salaried, not hourly — they don't pick up shifts, so
+ * this returns nothing for them rather than exposing a list they can't act on. */
 export async function getOpenShiftsForUser(user: CurrentUser) {
+  if (user.accountType !== "WORKER") return [];
+
   const unitIds = scopedUnitIds(user) ?? [];
   if (unitIds.length === 0) return [];
 
@@ -75,6 +79,10 @@ export async function signUpForShift(shiftId: string) {
 
 /** Core logic split from signUpForShift() — see getOpenShiftsForUser(). */
 export async function signUpForShiftAsUser(user: CurrentUser, shiftId: string) {
+  if (user.accountType !== "WORKER") {
+    throw new Error("Only workers can pick up open shifts");
+  }
+
   const shift = await prisma.shift.findUnique({ where: { id: shiftId } });
   if (!shift) throw new Error("Shift not found");
 
