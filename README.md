@@ -94,14 +94,19 @@ All seeded users share the password `Password123!`.
 
 | Role            | Badge number | Notes                          |
 | --------------- | ------------ | ------------------------------- |
-| Admin           | `10001`      | Kaiser — sees the whole hospital |
-| Manager         | `20001`      | Angela Allen — scoped to the ICU unit |
-| Asst. manager   | `20002`      | Brian Yu — ICU |
-| Asst. manager   | `20003`      | Elline Williams — ICU |
+| Admin           | `10001`      | "Kaiser" — sees the whole hospital (Kaiser Los Angeles Medical Center) |
+| Manager (ADA)   | `20001`      | Angela Allen — Pre-op, PACU A/B/C, Bronch, GI (not ICU) |
+| Asst. ADA       | `20002`      | Brian Yu — Pre-op, PACU A/B/C |
+| Asst. ADA       | `20003`      | Elline Williams — Pre-op, PACU A/B/C |
 | Worker          | `30001`      | Jamie Nurse — ICU, has an expired BLS cert |
-| Worker          | `30002`      | ICU                              |
-| Worker          | `30003`      | ICU, reported the sample call-in |
-| Worker          | `30004`      | Emergency Department (different unit — proves manager scoping) |
+| Worker          | `30002`      | Taylor Rivera — ICU |
+| Worker          | `30003`      | Casey Kim — ICU, reported the sample call-in |
+| Worker          | `30004`      | Sam Patel — ICU |
+
+ICU currently has no manager assigned in the seed data (Angela's org was
+restructured to Pre-op/PACU/Bronch/GI — see git log around
+`sync-org-structure` for why); admin is the only account that can review
+ICU's credentials/time-off/pickups on web today.
 
 ### Other scripts
 
