@@ -3,6 +3,10 @@
 Hospital workforce management — scheduling, timekeeping, and credential
 tracking for hospital units.
 
+Not building right now, but on record for later: see
+[ROADMAP.md](ROADMAP.md) for the Phase 2 backlog (auto-fill scheduling,
+acuity-based staffing calculator, forecasting, and more).
+
 ## Architecture decision: one app, four pillars
 
 This is a **single Next.js codebase** (App Router, frontend + API routes
@@ -95,16 +99,40 @@ All seeded users share the password `Password123!`.
 | Role            | Badge number | Notes                          |
 | --------------- | ------------ | ------------------------------- |
 | Admin           | `10001`      | "Kaiser" — sees the whole hospital (Kaiser Los Angeles Medical Center) |
-| Manager (ADA)   | `20001`      | Angela Allen — Pre-op, PACU A/B/C, Bronch, GI (not ICU) |
-| Asst. ADA       | `20002`      | Brian Yu — Pre-op, PACU A/B/C |
-| Asst. ADA       | `20003`      | Elline Williams — Pre-op, PACU A/B/C |
+| Manager (ADA)   | `20001`      | Angela Allen — Pre-op, PACU A/B, PACU/PRE-OP, Overnight, Charge Nurse (not ICU) |
+| Asst. ADA       | `20002`      | Brian Yu — Pre-op, PACU A/B, PACU/PRE-OP, Overnight, Charge Nurse |
+| Asst. ADA       | `20003`      | Elline Williams — Pre-op, PACU A/B, PACU/PRE-OP, Overnight, Charge Nurse |
 | Worker          | `30001`      | Jamie Nurse — ICU, has an expired BLS cert |
 | Worker          | `30002`      | Taylor Rivera — ICU |
 | Worker          | `30003`      | Casey Kim — ICU, reported the sample call-in |
-| Worker          | `30004`      | Sam Patel — ICU |
+| Worker          | `30004`      | Sam Patel — ICU, ED |
+| Worker          | `30005`      | Traci — Pre-op |
+| Worker          | `30006`      | Eileen — Pre-op |
+| Worker          | `30007`      | Anthony Brown — PACU A |
+| Worker          | `30008`      | Vanessa Hawkins — PACU A |
+| Worker          | `30009`      | Ray — PACU B |
+| Worker          | `30010`      | Edward — PACU B |
+| Worker          | `30011`      | Peter — Pre-op |
+| Worker          | `30012`      | Emily — Pre-op |
+| Worker          | `30013`      | Kathleen DeLaCruz — PACU A |
+| Worker          | `30014`      | Lydia Rodriguez — PACU A |
+| Worker          | `30015`      | Christopher Vraa — PACU A |
+| Worker          | `30016`      | Jonalyn Turbola — PACU A |
+| Worker          | `30017`      | Paul — PACU B |
+| Worker          | `30018`      | Cliffanie — PACU B |
+| Worker          | `30019`      | Grace C — Overnight |
+| Worker          | `30020`      | Marian — Overnight |
+| Worker          | `30021`      | Saritha — Overnight |
+| Worker          | `30022`      | Denise — Overnight |
+| Worker          | `30023`      | Anthony — Overnight |
+| Worker          | `30024`      | Tilahun — Orderly |
+| Worker          | `30025`      | Sal — Orderly |
+| Worker          | `30026`      | Christina Santiago — Charge Nurse |
+| Worker          | `30027`      | Edwin Bautista — Charge Nurse |
+| Worker          | `30028`      | Rosalie Kneebone — Charge Nurse |
 
 ICU currently has no manager assigned in the seed data (Angela's org was
-restructured to Pre-op/PACU/Bronch/GI — see git log around
+restructured to Pre-op/PACU A/B/PACU-PRE-OP/Overnight/Charge Nurse — see git log around
 `sync-org-structure` for why); admin is the only account that can review
 ICU's credentials/time-off/pickups on web today.
 
@@ -562,21 +590,11 @@ means the device itself, not your dev machine.
   parallel implementations for web (`src/components/schedule-calendar.tsx`)
   and mobile (`mobile/src/components/schedule-calendar.tsx`). Verified
   visually and interactively (month navigation) in the browser for web.
-- **6-week schedule request windows + priority-group labeling.** Managers
-  release a 6-week period per unit (`createScheduleRequestWindow` — sets
-  `SchedulePeriod.requestsOpen = true`, `endDate = startDate + 42 days`).
-  While open, any worker can tap requested days on a calendar picker and
-  submit (`ScheduleRequest`, one row per worker per period, resubmitting
-  overwrites); anyone can request any day — there's no tier-based lockout —
-  but the manager's review list shows each submission's priority-group tier
-  so higher-priority requests can be favored when actually building the
-  shift schedule. Verified fully end-to-end in the browser: released a
-  period as manager Angela Allen (confirmed the 42-day span computed
-  correctly), submitted 3 requested days + a note as worker Jamie Nurse,
-  confirmed the manager's view showed the submission with the correct
-  "Tier 1 — Full-time" badge matching her roster entry, and confirmed
-  **Close requests** correctly stops it from showing as an open window on
-  the worker side.
+- **6-week self-scheduling periods.** Managers release a 6-week period per
+  unit (`createScheduleRequestWindow` — sets `SchedulePeriod.requestsOpen =
+  true`, `endDate = startDate + 42 days`). Workers can only sign up for open
+  shifts whose dates fall inside a released period; closing the period stops
+  those shifts from appearing in the worker Open Shifts list.
 - **Calendar sync moved into Settings — mobile.** Previously lived on the
   My Schedule tab; now it's under a dedicated Settings tab alongside the
   biometric-lock toggle, and is still restricted to worker accounts (not
