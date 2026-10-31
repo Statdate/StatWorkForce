@@ -18,6 +18,8 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Guarded logical backup/restore drill and operational evidence template are available
 - [x] Separate process liveness and database readiness checks plus scheduled external probe are available
 - [x] Incident-response workflow, severity framework, breach-decision path, and pilot support operating template are documented
+- [x] Weekly web, mobile, GitHub Actions, and Docker dependency-update tracking is configured
+- [x] Independent security assessment scope, required synthetic tenants, rules of engagement, and retest exit criteria are documented
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [x] Chromium browser critical paths cover anonymous access, invalid tenant login, worker, manager, administrator, navigation, and sign-out in CI
 - [x] Automated WCAG A/AA scans and phone-viewport overflow regression checks run in CI
