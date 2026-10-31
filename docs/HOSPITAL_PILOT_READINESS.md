@@ -12,6 +12,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Mobile lint and TypeScript pass
 - [x] Web production build succeeds
 - [x] Mobile web export succeeds in CI
+- [x] Mobile Expo 57 core/router updated to latest compatible patches; critical advisory removed and residual SDK-major upgrade gate documented
 - [x] Production-server smoke checks cover health, authentication, tenant-qualified login, role boundaries, schedule access, audit access, and cron authentication
 - [x] CI runs on pull requests and pushes to `main`
 - [x] Deployment preflight validates remote TLS database configuration, independent strong secrets, deployment tier, and production object storage
