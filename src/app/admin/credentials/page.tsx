@@ -30,7 +30,10 @@ export default async function AdminCredentialsPage() {
             Every worker in the hospital, soonest expiration first.
           </p>
         </div>
-        <PrintButton />
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <a href="/api/admin/credential-documents-export" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Export documents</a>
+          <PrintButton />
+        </div>
       </div>
 
       <div className="mt-6">

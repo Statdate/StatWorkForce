@@ -28,7 +28,7 @@ The hospital, product owner, security/privacy lead, and counsel must assign each
 
 ## Customer access, export, and correction
 
-Define authorized requester verification, export scope/format, secure transfer, response target, correction workflow, audit evidence, and whether statutory individual-rights requests are handled by the hospital as controller/business associate. The administrator API provides a bounded, hospital-scoped JSON operational-data export and a separate audit CSV export. The JSON export deliberately excludes authentication secrets, push tokens, credential document contents/storage keys, and provider error details; credential files require a separately approved secure transfer process. Large exports return a managed-offline-export requirement instead of exhausting the web process.
+Define authorized requester verification, export scope/format, secure transfer, response target, correction workflow, audit evidence, and whether statutory individual-rights requests are handled by the hospital as controller/business associate. The administrator API provides a bounded, hospital-scoped JSON operational-data export, audit CSV export, and separate credential-document ZIP with a manifest. The JSON export deliberately excludes authentication secrets, push tokens, credential document contents/storage keys, and provider error details. The ZIP is limited to 100 documents/50 MiB, uses tenant-checked object retrieval and safe generated filenames, and creates an immutable audit event. Larger exports require the managed offline process instead of exhausting the web process.
 
 ## Termination and deletion
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { strFromU8, unzipSync } from "fflate";
 
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
 
@@ -80,6 +81,10 @@ const workerExportAttempt = await request("/api/admin/data-export", {
   headers: bearer(workerToken),
 });
 assert.equal(workerExportAttempt.response.status, 403, "worker must not export hospital data");
+const workerDocumentExportAttempt = await request("/api/admin/credential-documents-export", {
+  headers: bearer(workerToken),
+});
+assert.equal(workerDocumentExportAttempt.response.status, 403, "worker must not export credential documents");
 
 const workerManagerAttempt = await request("/api/manager/schedule", {
   headers: bearer(workerToken),
@@ -103,6 +108,18 @@ for (const excludedField of ["passwordHash", "sessionVersion", "expoPushToken", 
   assert.equal(serializedExport.includes(`\"${excludedField}\"`), false, `export must exclude ${excludedField}`);
 }
 
+const credentialArchiveResponse = await fetch(`${baseUrl}/api/admin/credential-documents-export`, {
+  headers: bearer(adminToken),
+});
+assert.equal(credentialArchiveResponse.status, 200, "administrator credential document export should succeed");
+assert.equal(credentialArchiveResponse.headers.get("content-type"), "application/zip");
+assert.equal(credentialArchiveResponse.headers.get("cache-control"), "private, no-store");
+const credentialArchive = unzipSync(new Uint8Array(await credentialArchiveResponse.arrayBuffer()));
+assert.ok(credentialArchive["manifest.json"], "credential archive must include a manifest");
+const credentialManifest = JSON.parse(strFromU8(credentialArchive["manifest.json"]));
+assert.equal(credentialManifest.schemaVersion, 1);
+assert.equal(credentialManifest.documentCount, Number(credentialArchiveResponse.headers.get("x-document-count")));
+
 const auditExport = await request("/api/admin/audit-logs/export", { headers: bearer(adminToken) });
 assert.equal(auditExport.response.status, 200, "administrator audit export should succeed");
 assert.match(auditExport.response.headers.get("content-type") ?? "", /^text\/csv/);
@@ -111,6 +128,7 @@ assert.equal(exportAudit.response.status, 200);
 const exportActions = exportAudit.body?.items?.map((item) => item.action) ?? [];
 assert.ok(exportActions.includes("HOSPITAL_DATA_EXPORTED"), "hospital export must create an audit event");
 assert.ok(exportActions.includes("AUDIT_LOG_EXPORTED"), "audit CSV export must create an audit event");
+assert.ok(exportActions.includes("CREDENTIAL_DOCUMENTS_EXPORTED"), "credential document export must create an audit event");
 
 const invalidCron = await request("/api/cron/push-delivery", {
   method: "POST",
