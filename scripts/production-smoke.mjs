@@ -52,7 +52,7 @@ const wrongHospital = await request("/api/auth/token", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
-    organizationCode: "wrong-hospital",
+    organizationCode: `wrong-hospital-${Date.now()}`,
     badgeNumber: "30001",
     password: "Password123!",
   }),
@@ -74,6 +74,11 @@ const workerAuditAttempt = await request("/api/admin/audit-logs?limit=1", {
 });
 assert.equal(workerAuditAttempt.response.status, 403, "worker must not access admin audit data");
 
+const workerExportAttempt = await request("/api/admin/data-export", {
+  headers: bearer(workerToken),
+});
+assert.equal(workerExportAttempt.response.status, 403, "worker must not export hospital data");
+
 const workerManagerAttempt = await request("/api/manager/schedule", {
   headers: bearer(workerToken),
 });
@@ -85,6 +90,16 @@ const adminAudit = await request("/api/admin/audit-logs?limit=1", {
 });
 assert.equal(adminAudit.response.status, 200, "admin audit endpoint should load");
 assert.ok(Array.isArray(adminAudit.body?.items));
+
+const adminExport = await request("/api/admin/data-export", { headers: bearer(adminToken) });
+assert.equal(adminExport.response.status, 200, "administrator hospital export should succeed");
+assert.equal(adminExport.response.headers.get("cache-control"), "private, no-store");
+assert.equal(adminExport.body?.schemaVersion, 1);
+assert.ok(Array.isArray(adminExport.body?.data?.users));
+const serializedExport = JSON.stringify(adminExport.body);
+for (const excludedField of ["passwordHash", "sessionVersion", "expoPushToken", "fileData", "storageKey", "pushLastError"]) {
+  assert.equal(serializedExport.includes(`\"${excludedField}\"`), false, `export must exclude ${excludedField}`);
+}
 
 const invalidCron = await request("/api/cron/push-delivery", {
   method: "POST",

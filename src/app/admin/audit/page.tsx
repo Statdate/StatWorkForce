@@ -22,12 +22,20 @@ export default async function AdminAuditPage() {
             Security-sensitive activity for this hospital, newest first.
           </p>
         </div>
-        <a
-          href="/api/admin/audit-logs/export"
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Export CSV
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/api/admin/data-export"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Export hospital data
+          </a>
+          <a
+            href="/api/admin/audit-logs/export"
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Export audit CSV
+          </a>
+        </div>
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">

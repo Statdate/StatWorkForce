@@ -12,7 +12,7 @@ test("anonymous users are redirected and invalid hospital login is rejected", as
   await page.goto("/worker");
   await expect(page).toHaveURL(/\/login$/);
 
-  await page.getByLabel("Hospital code").fill("wrong-hospital");
+  await page.getByLabel("Hospital code").fill(`wrong-hospital-${Date.now()}`);
   await page.getByLabel("Badge number").fill("30001");
   await page.getByLabel("Password").fill("Password123!");
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -45,4 +45,8 @@ test("administrator can navigate hospital controls", async ({ page }) => {
   await page.getByRole("link", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/);
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Export hospital data" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^statworkforce-hospital-export-\d{4}-\d{2}-\d{2}\.json$/);
 });
