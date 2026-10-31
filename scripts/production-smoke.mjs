@@ -103,6 +103,15 @@ for (const excludedField of ["passwordHash", "sessionVersion", "expoPushToken", 
   assert.equal(serializedExport.includes(`\"${excludedField}\"`), false, `export must exclude ${excludedField}`);
 }
 
+const auditExport = await request("/api/admin/audit-logs/export", { headers: bearer(adminToken) });
+assert.equal(auditExport.response.status, 200, "administrator audit export should succeed");
+assert.match(auditExport.response.headers.get("content-type") ?? "", /^text\/csv/);
+const exportAudit = await request("/api/admin/audit-logs?limit=10", { headers: bearer(adminToken) });
+assert.equal(exportAudit.response.status, 200);
+const exportActions = exportAudit.body?.items?.map((item) => item.action) ?? [];
+assert.ok(exportActions.includes("HOSPITAL_DATA_EXPORTED"), "hospital export must create an audit event");
+assert.ok(exportActions.includes("AUDIT_LOG_EXPORTED"), "audit CSV export must create an audit event");
+
 const invalidCron = await request("/api/cron/push-delivery", {
   method: "POST",
   headers: { Authorization: "Bearer invalid-smoke-secret" },

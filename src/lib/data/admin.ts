@@ -352,7 +352,7 @@ export async function getHospitalAuditLogs(options: { cursor?: string; limit?: n
 
 export async function getHospitalAuditExport() {
   const admin = await requireRole("ADMIN");
-  return prisma.auditLog.findMany({
+  const logs = await prisma.auditLog.findMany({
     where: { hospitalId: admin.hospitalId },
     include: {
       actor: { select: { firstName: true, lastName: true, badgeNumber: true } },
@@ -362,6 +362,14 @@ export async function getHospitalAuditExport() {
     // exports belong in a background-job/reporting pipeline.
     take: 10_000,
   });
+  await recordAuditEvent({
+    hospitalId: admin.hospitalId,
+    actorId: admin.id,
+    action: "AUDIT_LOG_EXPORTED",
+    resourceType: "AuditLog",
+    metadata: { format: "csv", recordCount: logs.length },
+  });
+  return logs;
 }
 
 export async function getHospitalUsers() {
