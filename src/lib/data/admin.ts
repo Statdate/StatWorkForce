@@ -12,6 +12,7 @@ import {
   StrongPasswordSchema,
   UpdateHospitalUserAccessSchema,
 } from "@/lib/validation/password";
+import { parseCallInResolution } from "@/lib/validation/call-in";
 
 /** Org-wide overview. Admin only — sees every unit and job type in the hospital. */
 export async function getOrgOverview() {
@@ -41,6 +42,43 @@ export async function getOrgOverview() {
   ]);
 
   return { hospital, units, openCallIns };
+}
+
+export async function resolveHospitalCallIn(
+  callInId: string,
+  input: { status: unknown; notes: unknown }
+) {
+  const admin = await requireRole("ADMIN");
+  const resolution = parseCallInResolution(input);
+  const callIn = await prisma.callIn.findFirst({
+    where: { id: callInId, status: "OPEN", shift: { unit: { hospitalId: admin.hospitalId } } },
+    select: { id: true, status: true },
+  });
+  if (!callIn) throw new Error("Open call-in not found");
+
+  await prisma.$transaction(async (tx) => {
+    const updated = await tx.callIn.updateMany({
+      where: { id: callIn.id, status: "OPEN" },
+      data: {
+        status: resolution.status,
+        notes: resolution.notes,
+        handledById: admin.id,
+        handledAt: new Date(),
+      },
+    });
+    if (updated.count !== 1) throw new Error("Call-in was already handled");
+    await recordAuditEvent(
+      {
+        hospitalId: admin.hospitalId,
+        actorId: admin.id,
+        action: "CALL_IN_RESOLVED",
+        resourceType: "CallIn",
+        resourceId: callIn.id,
+        metadata: { previousStatus: callIn.status, currentStatus: resolution.status },
+      },
+      tx
+    );
+  });
 }
 
 export async function getPushDeliveryOverview() {

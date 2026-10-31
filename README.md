@@ -231,8 +231,9 @@ a fresh local database:
   withdraw, re-withdraw correctly rejected ("already reviewed"), and 401 for
   unauthenticated requests.
 
-Not yet exercised: admin call-in handling actions — those remain read-only
-in this pass.
+Administrators can resolve open call-ins as covered or unresolved from the
+hospital overview, with an optional operational note and an immutable audit
+event committed in the same transaction.
 
 ## Project structure
 

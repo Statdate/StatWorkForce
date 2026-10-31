@@ -50,3 +50,17 @@ test("administrator can navigate hospital controls", async ({ page }) => {
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^statworkforce-hospital-export-\d{4}-\d{2}-\d{2}\.json$/);
 });
+
+test("administrator can resolve an open call-in and see its audit event", async ({ page }) => {
+  await login(page, "10001");
+  const matchingRows = page.getByRole("row").filter({ hasText: "Family emergency" });
+  const initialCount = await matchingRows.count();
+  expect(initialCount).toBeGreaterThan(0);
+  const callInRow = matchingRows.first();
+  await expect(callInRow).toBeVisible();
+  await callInRow.getByLabel("Resolution note (optional)").fill("Covered by float pool");
+  await callInRow.getByRole("button", { name: "Mark covered" }).click();
+  await expect(matchingRows).toHaveCount(initialCount - 1);
+  await page.getByRole("link", { name: "Audit log" }).click();
+  await expect(page.getByText("CALL_IN_RESOLVED").first()).toBeVisible();
+});
