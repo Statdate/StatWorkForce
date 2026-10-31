@@ -33,6 +33,11 @@ function bearer(token) {
   return { Authorization: `Bearer ${token}` };
 }
 
+const liveness = await request("/api/health/live");
+assert.equal(liveness.response.status, 200, "liveness endpoint should succeed");
+assert.deepEqual(liveness.body, { status: "alive" });
+assert.equal(liveness.response.headers.get("cache-control"), "no-store");
+
 const health = await request("/api/health");
 assert.equal(health.response.status, 200, "readiness endpoint should succeed");
 assert.deepEqual(health.body, { status: "ok" });

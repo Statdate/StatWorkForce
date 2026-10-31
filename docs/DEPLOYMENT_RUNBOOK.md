@@ -13,6 +13,8 @@ Stat Workforce is delivered as a vendor-hosted web application and companion mob
 - TLS and DNS: customer-facing HTTPS domain with provider-managed certificate
 - Monitoring: external uptime check on `/api/health`, application error reporting, database alerts, and an owned escalation channel
 
+`/api/health/live` confirms that the application process can respond. `/api/health` is the readiness check and returns success only after a database round trip. Configure the GitHub repository variable `MONITOR_BASE_URL` with the HTTPS environment URL to activate the included five-minute external check. GitHub Actions is a baseline check, not a contractual monitoring platform; production also requires an independent uptime/error service with paging and an owned escalation policy.
+
 The current `render.yaml` is appropriate for a staging demonstration. A hospital production launch must use a paid, highly available service/database plan selected for the contracted recovery and support targets.
 
 ## First staging deployment
