@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:smoke": "node scripts/production-smoke.mjs",
     "test:invariants": "tsx scripts/database-invariants.ts",
+    "deploy:preflight": "node scripts/deployment-preflight.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

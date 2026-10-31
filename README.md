@@ -357,6 +357,10 @@ src/app/login/              Badge number + password login
 
 ## Deploying to Render
 
+For staging, production promotion, rollback, and retained evidence, follow the
+[Hospital Deployment Runbook](docs/DEPLOYMENT_RUNBOOK.md). Run
+`npm run deploy:preflight` before migrations or a remote build.
+
 Live at **https://statworkforce.onrender.com** (Blueprint-deployed from
 `render.yaml`: a free-tier web service + free-tier managed Postgres,
 GitHub-connected for auto-deploy on every push to `main`; `render.yaml`'s
