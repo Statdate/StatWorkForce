@@ -18,6 +18,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Separate audited hospital credential-document ZIP export uses safe names, manifest, tenant-checked storage access, and strict count/size limits
 - [x] Manual protected-environment staging workflow runs HTTPS readiness and parameterized synthetic worker/admin release checks
 - [x] Administrator CSV onboarding supports dry-run validation, atomic new-user import, generated one-time temporary credentials, and immutable batch audit
+- [x] Consolidated release-candidate evidence records clean installs, audits, 40 unit tests, 9 browser tests, 46-route build, restored database, smoke/invariants, mobile export, and load baseline
 - [x] Production-server smoke checks cover health, authentication, tenant-qualified login, role boundaries, schedule access, audit access, and cron authentication
 - [x] CI runs on pull requests and pushes to `main`
 - [x] Deployment preflight validates remote TLS database configuration, independent strong secrets, deployment tier, and production object storage
