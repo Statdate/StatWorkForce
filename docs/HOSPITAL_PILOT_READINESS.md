@@ -22,6 +22,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Independent security assessment scope, required synthetic tenants, rules of engagement, and retest exit criteria are documented
 - [x] Data-minimized structured server-error telemetry includes environment/release/route dimensions without request or customer contents
 - [x] Audited hospital-scoped operational data export excludes authentication, push, document-storage, and provider secrets
+- [x] CSP embedding/base/form/plugin restrictions and no-index browser policy are runtime smoke-tested
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [x] Chromium browser critical paths cover anonymous access, invalid tenant login, worker, manager, administrator, navigation, and sign-out in CI
 - [x] Automated WCAG A/AA scans and phone-viewport overflow regression checks run in CI

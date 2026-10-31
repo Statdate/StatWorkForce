@@ -44,6 +44,8 @@ assert.deepEqual(health.body, { status: "ok" });
 assert.equal(health.response.headers.get("cache-control"), "no-store");
 assert.equal(health.response.headers.get("x-content-type-options"), "nosniff");
 assert.equal(health.response.headers.get("x-frame-options"), "DENY");
+assert.match(health.response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
+assert.equal(health.response.headers.get("x-robots-tag"), "noindex, nofollow, noarchive");
 
 const unauthenticated = await request("/api/me");
 assert.equal(unauthenticated.response.status, 401, "protected API should reject anonymous access");
