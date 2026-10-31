@@ -124,6 +124,8 @@ The current platform includes:
 
 These controls support a hospital security review, but they are not by themselves a certification. Before handling production protected health information or other regulated data, complete formal legal, security, privacy, disaster-recovery, penetration-testing, and vendor-risk processes.
 
+Implementation is governed by the repository's hospital pilot implementation plan, with explicit discovery, configuration, testing, training, parallel-run, cutover, stabilization, and expansion/closure gates. Customer data retention, return, and deletion are finalized during contracting using the draft data lifecycle standard; they should never be improvised during termination.
+
 # What customers should be taught
 
 ## Executive education: 20 minutes

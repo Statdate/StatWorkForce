@@ -56,6 +56,8 @@ This checklist separates code readiness from the legal, operational, and custome
 
 ## Customer-specific readiness
 
+Use the [hospital pilot implementation plan](HOSPITAL_PILOT_IMPLEMENTATION_PLAN.md) to assign owners, scope, success measures, test evidence, training, parallel run, cutover, rollback, and written approvals.
+
 - [ ] Name executive sponsor, clinical owner, IT owner, and project manager
 - [ ] Approve pilot units and worker population
 - [ ] Document scheduling, union, seniority, rest-period, overtime, and approval rules
@@ -66,6 +68,11 @@ This checklist separates code readiness from the legal, operational, and custome
 - [ ] Approve data migration, validation, training, parallel-run, rollback, and cutover plans
 - [ ] Train administrators and unit champions
 - [ ] Obtain written go-live approval from the customer and Stat Workforce owners
+
+## Readiness artifacts available
+
+- [x] Fillable hospital pilot phase gates, ownership matrix, success measures, parallel-run, cutover, and approval plan
+- [x] Draft data lifecycle, retention approval matrix, export/return, termination/deletion, backup expiry, and legal-hold standard
 
 ## Current release decision
 
