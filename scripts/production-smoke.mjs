@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { strFromU8, unzipSync } from "fflate";
 
 const baseUrl = (process.env.SMOKE_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");
+const organizationCode = process.env.SMOKE_ORG_CODE ?? "kaiser-la";
+const workerBadge = process.env.SMOKE_WORKER_BADGE ?? "30001";
+const workerPassword = process.env.SMOKE_WORKER_PASSWORD ?? "Password123!";
+const adminBadge = process.env.SMOKE_ADMIN_BADGE ?? "10001";
+const adminPassword = process.env.SMOKE_ADMIN_PASSWORD ?? "Password123!";
 
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, options);
@@ -15,17 +20,17 @@ async function request(path, options = {}) {
   return { response, body };
 }
 
-async function login(badgeNumber) {
+async function login(badgeNumber, password) {
   const result = await request("/api/auth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      organizationCode: "kaiser-la",
+      organizationCode,
       badgeNumber,
-      password: "Password123!",
+      password,
     }),
   });
-  assert.equal(result.response.status, 200, `seeded login ${badgeNumber} should succeed`);
+  assert.equal(result.response.status, 200, `synthetic login ${badgeNumber} should succeed`);
   assert.equal(typeof result.body?.token, "string", "login should return a token");
   return result.body.token;
 }
@@ -56,17 +61,17 @@ const wrongHospital = await request("/api/auth/token", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({
     organizationCode: `wrong-hospital-${Date.now()}`,
-    badgeNumber: "30001",
-    password: "Password123!",
+    badgeNumber: workerBadge,
+    password: workerPassword,
   }),
 });
 assert.equal(wrongHospital.response.status, 401, "tenant-qualified login must reject a wrong hospital");
 
-const workerToken = await login("30001");
+const workerToken = await login(workerBadge, workerPassword);
 const workerProfile = await request("/api/me", { headers: bearer(workerToken) });
 assert.equal(workerProfile.response.status, 200);
 assert.equal(workerProfile.body?.accountType, "WORKER");
-assert.equal(workerProfile.body?.badgeNumber, "30001");
+assert.equal(workerProfile.body?.badgeNumber, workerBadge);
 
 const workerSchedule = await request("/api/schedule", { headers: bearer(workerToken) });
 assert.equal(workerSchedule.response.status, 200, "worker schedule should load");
@@ -91,7 +96,7 @@ const workerManagerAttempt = await request("/api/manager/schedule", {
 });
 assert.equal(workerManagerAttempt.response.status, 403, "worker must not access manager scheduling data");
 
-const adminToken = await login("10001");
+const adminToken = await login(adminBadge, adminPassword);
 const adminAudit = await request("/api/admin/audit-logs?limit=1", {
   headers: bearer(adminToken),
 });

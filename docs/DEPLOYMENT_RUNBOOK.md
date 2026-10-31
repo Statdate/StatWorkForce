@@ -30,6 +30,8 @@ The current `render.yaml` is appropriate for a staging demonstration. A hospital
 7. Create staging-only administrators and test users. Never retain seeded passwords in a shared environment.
 8. Record the commit SHA, migration result, smoke-test evidence, operator, and timestamp in the release record.
 
+For repeatable remote validation, configure the GitHub `staging` environment with `STAGING_BASE_URL` plus synthetic worker/admin organization, badge, and password secrets named in `.github/workflows/staging-validation.yml`. Protect that environment with the desired reviewer rule, then manually run **Validate staging deployment** after each deploy. The workflow refuses missing configuration, requires HTTPS through the monitoring check, and exercises authenticated tenant/RBAC/export behavior without embedding staging credentials in the repository.
+
 Before pilot approval, run the read-only authenticated load harness with the customer-approved concurrency and latency target. Credentials should belong to a synthetic staging worker, never a real employee:
 
 ```bash
