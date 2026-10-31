@@ -48,3 +48,5 @@ For credential storage or database failure, place the service in maintenance mod
 - Migration, health, smoke, backup, and restore-drill results
 - Security assessment and remediation evidence
 - Customer configuration, training completion, cutover approval, and rollback decision owner
+
+Use the [operational evidence template](OPERATIONAL_EVIDENCE_TEMPLATE.md) for a consistent release record. The repository includes `npm run db:restore-drill` for a logical backup/restore test against an explicitly acknowledged disposable database. The hosting provider's snapshot and point-in-time recovery procedure must also be drilled because a logical dump alone does not validate the managed backup system.

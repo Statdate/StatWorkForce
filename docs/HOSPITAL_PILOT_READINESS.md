@@ -15,6 +15,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Production-server smoke checks cover health, authentication, tenant-qualified login, role boundaries, schedule access, audit access, and cron authentication
 - [x] CI runs on pull requests and pushes to `main`
 - [x] Deployment preflight validates remote TLS database configuration, independent strong secrets, deployment tier, and production object storage
+- [x] Guarded logical backup/restore drill and operational evidence template are available
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [ ] Mobile device regression pass on supported iOS and Android versions
 - [ ] Load test using the pilot's expected worker, unit, and schedule volumes
