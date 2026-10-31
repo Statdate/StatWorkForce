@@ -15,6 +15,8 @@ Stat Workforce is delivered as a vendor-hosted web application and companion mob
 
 `/api/health/live` confirms that the application process can respond. `/api/health` is the readiness check and returns success only after a database round trip. Configure the GitHub repository variable `MONITOR_BASE_URL` with the HTTPS environment URL to activate the included five-minute external check. GitHub Actions is a baseline check, not a contractual monitoring platform; production also requires an independent uptime/error service with paging and an owned escalation policy.
 
+Unhandled server request errors are emitted as one-line structured JSON. These events intentionally exclude request URLs/query strings, headers, error messages/stacks, user IDs, and hospital IDs. Configure the hosting log drain or selected monitoring provider to alert on `event=server_request_error`; set `RELEASE_SHA` outside Render so events can be tied to an immutable release. Validate alert delivery with a controlled synthetic failure before go-live.
+
 The current `render.yaml` is appropriate for a staging demonstration. A hospital production launch must use a paid, highly available service/database plan selected for the contracted recovery and support targets.
 
 ## First staging deployment
