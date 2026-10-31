@@ -6,20 +6,20 @@
 
 services:
   - type: web
-    name: statworkforce
+    name: statworkforce-staging
     runtime: node
     plan: starter
-    # Runs the migration on every deploy, so schema changes ship automatically
-    # on push instead of needing a manual `prisma migrate deploy` each time.
-    buildCommand: npm ci --no-audit --no-fund && npm run db:generate && npm run deploy:preflight && npm run db:migrate:deploy && npm run build
+    buildCommand: npm ci --no-audit --no-fund && npm run db:generate && npm run deploy:preflight && npm run build
+    # Migrations are a release step, not a build side effect. Render runs this
+    # against the new release before routing traffic to it.
+    preDeployCommand: npm run db:migrate:deploy
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
-           # Neon connection string, set in the dashboard. Use Neon's DIRECT
-      # endpoint, not the -pooler one: the datasource block has no directUrl,
-      # so db:migrate:deploy above runs on this same URL, and PgBouncer in
-      # transaction mode doesn't support the advisory locks Prisma takes.
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: statworkforce-staging-db
+          property: connectionString
       - key: SESSION_SECRET
         sync: false
       # Shared secret for the GitHub Actions daily cron
@@ -38,3 +38,12 @@ services:
       # also applies it during the build phase, which makes `npm install`
       # skip devDependencies (tailwindcss, @tailwindcss/postcss, typescript)
       # that `next build` needs. Learned this the hard way on the first deploy.
+
+databases:
+  - name: statworkforce-staging-db
+    plan: basic-256mb
+    databaseName: statworkforce_staging
+    user: statworkforce
+    # No public database ingress. Application and release commands use the
+    # Render private network connection injected above.
+    ipAllowList: []

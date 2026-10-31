@@ -17,7 +17,7 @@ Stat Workforce is delivered as a vendor-hosted web application and companion mob
 
 Unhandled server request errors are emitted as one-line structured JSON. These events intentionally exclude request URLs/query strings, headers, error messages/stacks, user IDs, and hospital IDs. Configure the hosting log drain or selected monitoring provider to alert on `event=server_request_error`; set `RELEASE_SHA` outside Render so events can be tied to an immutable release. Validate alert delivery with a controlled synthetic failure before go-live.
 
-The current `render.yaml` is appropriate for a staging demonstration. A hospital production launch must use a paid, highly available service/database plan selected for the contracted recovery and support targets.
+The current `render.yaml` defines a separate `statworkforce-staging` service and private managed PostgreSQL database, database-aware health check, deterministic build, and pre-deploy migration step. Applying the Blueprint requires the owner's Render account and billable-resource confirmation. A hospital production launch must use a separately named paid, highly available service/database plan selected for the contracted recovery and support targets; do not repurpose staging in place.
 
 ## First staging deployment
 
