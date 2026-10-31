@@ -42,6 +42,8 @@ test("administrator can navigate hospital controls", async ({ page }) => {
   await login(page, "10001");
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "Kaiser Los Angeles Medical Center" })).toBeVisible();
+  await page.getByRole("link", { name: "Operational health" }).click();
+  await expect(page.getByRole("heading", { name: "Operational health" })).toBeVisible();
   await page.getByRole("link", { name: "Audit log" }).click();
   await expect(page).toHaveURL(/\/admin\/audit$/);
   await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();

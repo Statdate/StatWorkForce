@@ -14,6 +14,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Mobile web export succeeds in CI
 - [x] Mobile migrated as a complete Expo SDK 58/React Native 0.88 compatibility set; lint, TypeScript, Metro, and 18-route export pass with no critical/high audit findings
 - [x] Stable iOS/Android application identifiers and separate internal-preview/production EAS build profiles are configured
+- [x] Administrator operational-health dashboard detects published staffing gaps, credential-invalid assignments, overlaps, and failed push deliveries
 - [x] Production-server smoke checks cover health, authentication, tenant-qualified login, role boundaries, schedule access, audit access, and cron authentication
 - [x] CI runs on pull requests and pushes to `main`
 - [x] Deployment preflight validates remote TLS database configuration, independent strong secrets, deployment tier, and production object storage

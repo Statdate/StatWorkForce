@@ -5,6 +5,7 @@ const items = [
   { key: "credentials", label: "Credentials", href: "/admin/credentials" },
   { key: "users", label: "Users", href: "/admin/users" },
   { key: "delivery", label: "Delivery", href: "/admin/delivery" },
+  { key: "health", label: "Operational health", href: "/admin/health" },
   { key: "settings", label: "Settings", href: "/admin/settings" },
   { key: "audit", label: "Audit log", href: "/admin/audit" },
 ] as const;
