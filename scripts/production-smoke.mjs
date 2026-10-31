@@ -102,6 +102,9 @@ const adminAudit = await request("/api/admin/audit-logs?limit=1", {
 });
 assert.equal(adminAudit.response.status, 200, "admin audit endpoint should load");
 assert.ok(Array.isArray(adminAudit.body?.items));
+const adminManagerOversight = await request("/api/manager/schedule", { headers: bearer(adminToken) });
+assert.equal(adminManagerOversight.response.status, 200, "administrator should retain hospital-scoped manager API oversight");
+assert.ok(Array.isArray(adminManagerOversight.body?.shifts));
 
 const adminExport = await request("/api/admin/data-export", { headers: bearer(adminToken) });
 assert.equal(adminExport.response.status, 200, "administrator hospital export should succeed");
