@@ -10,6 +10,7 @@ import {
   updateUserAccessAction,
   unlockUserLoginAction,
 } from "@/app/actions/admin-users";
+import Link from "next/link";
 
 export default async function AdminUsersPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const [currentUser, users, provisioningOptions, params] = await Promise.all([
@@ -35,6 +36,19 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
           {params.error}
         </div>
       )}
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h2 className="text-lg font-medium text-slate-900">Bulk CSV onboarding</h2><p className="mt-1 text-sm text-slate-500">Preview first. Import creates new accounts only and returns unique temporary passwords once.</p></div>
+          <Link href="/api/admin/users/import" className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Download template</Link>
+        </div>
+        <form method="post" encType="multipart/form-data" className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm text-slate-700">User CSV<input type="file" name="file" accept=".csv,text/csv" required className="mt-1 block text-sm" /></label>
+          <button formAction="/api/admin/users/import?mode=preview" className="rounded border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Validate only</button>
+          <button formAction="/api/admin/users/import?mode=import" className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700">Import validated CSV</button>
+        </form>
+        <p className="mt-2 text-xs text-slate-500">Maximum 200 users/1 MiB. Unit and job-type names must already exist. Store the returned password file in an approved secure channel, then delete it after distribution.</p>
+      </section>
 
       <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-medium text-slate-900">Add worker or manager</h2>
