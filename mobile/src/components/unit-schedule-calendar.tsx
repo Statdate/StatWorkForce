@@ -77,7 +77,7 @@ export function UnitScheduleCalendar({
     setActionError(null);
     setWorkersLoading(true);
     try {
-      const { workers } = await getUnitWorkers(shift.unitId);
+      const { workers } = await getUnitWorkers(shift.unitId, shift.jobType.id);
       setWorkers(workers);
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : 'Could not load unit staff.');

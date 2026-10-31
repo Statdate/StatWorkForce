@@ -16,6 +16,8 @@ const MOBILE_TOKEN_DURATION = "30d"; // personal device, not shared — safe to 
 export type SessionPayload = {
   userId: string;
   accountType: AccountType;
+  sessionVersion: number;
+  mustChangePassword: boolean;
   expiresAt: string;
 };
 
@@ -38,9 +40,17 @@ export async function decrypt(session: string | undefined = "") {
   }
 }
 
-export async function createSession(userId: string, accountType: AccountType) {
+export async function createSession(
+  userId: string,
+  accountType: AccountType,
+  sessionVersion: number,
+  mustChangePassword = false
+) {
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
-  const session = await encrypt({ userId, accountType, expiresAt: expiresAt.toISOString() }, "12h");
+  const session = await encrypt(
+    { userId, accountType, sessionVersion, mustChangePassword, expiresAt: expiresAt.toISOString() },
+    "12h"
+  );
   const cookieStore = await cookies();
 
   cookieStore.set(SESSION_COOKIE, session, {
@@ -55,10 +65,15 @@ export async function createSession(userId: string, accountType: AccountType) {
 /** Same signed-JWT format as the web session, just handed back in a JSON body
  * instead of an httpOnly cookie — the mobile app stores it itself (SecureStore)
  * and sends it back as `Authorization: Bearer <token>`. */
-export async function createMobileToken(userId: string, accountType: AccountType) {
+export async function createMobileToken(
+  userId: string,
+  accountType: AccountType,
+  sessionVersion: number,
+  mustChangePassword = false
+) {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   return encrypt(
-    { userId, accountType, expiresAt: expiresAt.toISOString() },
+    { userId, accountType, sessionVersion, mustChangePassword, expiresAt: expiresAt.toISOString() },
     MOBILE_TOKEN_DURATION
   );
 }

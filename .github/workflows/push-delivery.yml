@@ -1,0 +1,25 @@
+name: Push delivery outbox
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: push-delivery-outbox
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deliver queued push notifications
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "https://statworkforce.onrender.com/api/cron/push-delivery" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          cat /tmp/response.json
+          if [ "$status" -ge 300 ]; then
+            echo "Push delivery endpoint returned HTTP $status"
+            exit 1
+          fi

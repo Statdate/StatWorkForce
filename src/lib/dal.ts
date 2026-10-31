@@ -22,7 +22,11 @@ export const verifySession = cache(async () => {
     redirect("/login");
   }
 
-  return { userId: session.userId, accountType: session.accountType };
+  return {
+    userId: session.userId,
+    accountType: session.accountType,
+    sessionVersion: session.sessionVersion,
+  };
 });
 
 const CURRENT_USER_SELECT = {
@@ -36,7 +40,11 @@ const CURRENT_USER_SELECT = {
   title: true,
   shiftPattern: true,
   isActive: true,
-  hospital: { select: { name: true } },
+  sessionVersion: true,
+  mustChangePassword: true,
+  hospital: {
+    select: { name: true, timeZone: true, weekStartsOn: true, weeklyHoursWarning: true },
+  },
   jobType: { select: { id: true, name: true } },
   unitMemberships: {
     select: {
@@ -59,10 +67,21 @@ export const getCurrentUser = cache(async () => {
     select: CURRENT_USER_SELECT,
   });
 
-  if (!user || !user.isActive) {
+  if (!user || !user.isActive || session.sessionVersion !== user.sessionVersion) {
     redirect("/login");
   }
+  if (user.mustChangePassword) redirect("/change-password");
 
+  return user;
+});
+
+/** Narrow exception used only by the forced initial-password page/action.
+ * Every normal data accessor uses getCurrentUser(), which refuses access
+ * until the temporary credential has been replaced. */
+export const getPasswordChangeUser = cache(async () => {
+  const session = await verifySession();
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: CURRENT_USER_SELECT });
+  if (!user || !user.isActive || session.sessionVersion !== user.sessionVersion) redirect("/login");
   return user;
 });
 
@@ -98,6 +117,6 @@ export const getApiUser = cache(async () => {
     select: CURRENT_USER_SELECT,
   });
 
-  if (!user || !user.isActive) return null;
+  if (!user || !user.isActive || user.mustChangePassword || session.sessionVersion !== user.sessionVersion) return null;
   return user;
 });

@@ -11,10 +11,26 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-900">Stat Workforce</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Sign in with your badge number and password.
+          Sign in with your hospital code, badge number, and password.
         </p>
 
         <form action={action} className="mt-6 space-y-4">
+          <div>
+            <label htmlFor="organizationCode" className="block text-sm font-medium text-slate-700">
+              Hospital code
+            </label>
+            <input
+              id="organizationCode"
+              name="organizationCode"
+              autoComplete="organization"
+              autoCapitalize="none"
+              spellCheck={false}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
+            />
+            {state?.errors?.organizationCode && (
+              <p className="mt-1 text-xs text-red-600">{state.errors.organizationCode[0]}</p>
+            )}
+          </div>
           <div>
             <label htmlFor="badgeNumber" className="block text-sm font-medium text-slate-700">
               Badge number

@@ -9,11 +9,11 @@ const prisma = new PrismaClient({ adapter });
 const SEED_PASSWORD = "Password123!";
 
 const JOB_TYPES = [
-  { name: "RN", category: "Nursing" },
-  { name: "LPN", category: "Nursing" },
-  { name: "CNA", category: "Nursing" },
-  { name: "RT", category: "Respiratory Therapy" },
-  { name: "Unit Clerk", category: "Support" },
+  { name: "RN", category: "Nursing", requiredCredentialTypes: ["RN_LICENSE" as const] },
+  { name: "LPN", category: "Nursing", requiredCredentialTypes: ["LPN_LICENSE" as const] },
+  { name: "CNA", category: "Nursing", requiredCredentialTypes: [] },
+  { name: "RT", category: "Respiratory Therapy", requiredCredentialTypes: [] },
+  { name: "Unit Clerk", category: "Support", requiredCredentialTypes: [] },
 ];
 
 const UNITS: {
@@ -52,14 +52,18 @@ async function main() {
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
 
   const hospital = await prisma.hospital.upsert({
-    where: { id: "seed-hospital" },
+    where: { code: "kaiser-la" },
     update: { name: "Kaiser Los Angeles Medical Center" },
-    create: { id: "seed-hospital", name: "Kaiser Los Angeles Medical Center" },
+    create: { id: "seed-hospital", code: "kaiser-la", name: "Kaiser Los Angeles Medical Center" },
   });
 
   const jobTypes = await Promise.all(
     JOB_TYPES.map((jt) =>
-      prisma.jobType.upsert({ where: { name: jt.name }, update: {}, create: jt })
+      prisma.jobType.upsert({
+        where: { hospitalId_name: { hospitalId: hospital.id, name: jt.name } },
+        update: { category: jt.category, requiredCredentialTypes: jt.requiredCredentialTypes },
+        create: { ...jt, hospitalId: hospital.id },
+      })
     )
   );
   const rnJobType = jobTypes.find((jt) => jt.name === "RN")!;

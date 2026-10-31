@@ -196,15 +196,20 @@ function WorkerScheduleView() {
                 <ThemedText type="small" themeColor="textSecondary">
                   {shift.jobType.name} · {shift.signedUpCount} / {shift.requiredCount} signed up
                 </ThemedText>
+                {!shift.credentialEligible && (
+                  <ThemedText type="small" style={styles.eligibilityError}>
+                    Missing or expired: {shift.missingCredentialLabels.join(', ')}
+                  </ThemedText>
+                )}
                 <Pressable
                   onPress={() => handleSignUp(shift.id)}
-                  disabled={pendingShiftId === shift.id}
+                  disabled={pendingShiftId === shift.id || !shift.credentialEligible}
                   accessibilityRole="button"
                   accessibilityLabel={`Sign up for ${shift.unit.name} shift, ${formatRange(shift.startTime, shift.endTime)}`}
-                  accessibilityState={{ disabled: pendingShiftId === shift.id }}
-                  style={[styles.actionButton, styles.signUpButton]}>
+                  accessibilityState={{ disabled: pendingShiftId === shift.id || !shift.credentialEligible }}
+                  style={[styles.actionButton, styles.signUpButton, !shift.credentialEligible && styles.disabledButton]}>
                   <ThemedText type="small" style={styles.signUpText}>
-                    {pendingShiftId === shift.id ? 'Signing up…' : 'Sign up'}
+                    {pendingShiftId === shift.id ? 'Signing up…' : !shift.credentialEligible ? 'Not eligible' : 'Sign up'}
                   </ThemedText>
                 </Pressable>
               </ThemedView>
@@ -247,6 +252,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
   },
+  disabledButton: { backgroundColor: '#94a3b8' },
+  eligibilityError: { color: '#b91c1c', fontWeight: '600', marginTop: Spacing.one },
   signUpText: { color: '#fff', fontWeight: '600' },
 });
 

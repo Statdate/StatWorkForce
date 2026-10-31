@@ -14,12 +14,13 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const unitId = searchParams.get("unitId");
-  if (!unitId) {
-    return corsJson({ error: "unitId is required" }, { status: 400 });
+  const jobTypeId = searchParams.get("jobTypeId");
+  if (!unitId || !jobTypeId) {
+    return corsJson({ error: "unitId and jobTypeId are required" }, { status: 400 });
   }
 
   try {
-    const workers = await getUnitWorkersForManager(user, unitId);
+    const workers = await getUnitWorkersForManager(user, unitId, jobTypeId);
     return corsJson({ workers });
   } catch (error) {
     return corsJson(

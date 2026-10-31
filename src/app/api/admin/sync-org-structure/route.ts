@@ -88,7 +88,9 @@ export async function POST(request: Request) {
     icuMembershipsRemoved = removed.count;
   }
 
-  const rnJobType = await prisma.jobType.findFirst({ where: { name: "RN" } });
+  const rnJobType = await prisma.jobType.findFirst({
+    where: { name: "RN", hospitalId: hospital.id },
+  });
   const pacuA = units.get("PACU A")!;
   const pacuB = units.get("PACU B")!;
   const shiftsCreated: string[] = [];
