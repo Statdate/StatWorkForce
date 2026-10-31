@@ -17,10 +17,12 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Deployment preflight validates remote TLS database configuration, independent strong secrets, deployment tier, and production object storage
 - [x] Guarded logical backup/restore drill and operational evidence template are available
 - [x] Separate process liveness and database readiness checks plus scheduled external probe are available
+- [x] Incident-response workflow, severity framework, breach-decision path, and pilot support operating template are documented
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [x] Chromium browser critical paths cover anonymous access, invalid tenant login, worker, manager, administrator, navigation, and sign-out in CI
 - [ ] Mobile device regression pass on supported iOS and Android versions
 - [ ] Load test using the pilot's expected worker, unit, and schedule volumes
+- [x] Configurable authenticated read-only load harness enforces error-rate and p95 latency thresholds
 
 ## Product controls implemented
 

@@ -13,6 +13,7 @@
     "test:invariants": "tsx scripts/database-invariants.ts",
     "deploy:preflight": "node scripts/deployment-preflight.mjs",
     "monitor:check": "node scripts/uptime-check.mjs",
+    "test:load": "node scripts/load-test.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

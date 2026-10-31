@@ -28,6 +28,21 @@ The current `render.yaml` is appropriate for a staging demonstration. A hospital
 7. Create staging-only administrators and test users. Never retain seeded passwords in a shared environment.
 8. Record the commit SHA, migration result, smoke-test evidence, operator, and timestamp in the release record.
 
+Before pilot approval, run the read-only authenticated load harness with the customer-approved concurrency and latency target. Credentials should belong to a synthetic staging worker, never a real employee:
+
+```bash
+LOAD_BASE_URL='https://staging.example.com' \
+LOAD_ORG_CODE='pilot-test' \
+LOAD_WORKER_BADGE='load-test-worker' \
+LOAD_WORKER_PASSWORD='<secret>' \
+LOAD_CONCURRENCY=25 \
+LOAD_REQUESTS_PER_USER=40 \
+LOAD_MAX_P95_MS=750 \
+npm run test:load
+```
+
+The harness uses read-only profile, schedule, open-shift, and notification requests. Record throughput, p50/p95/p99 latency, error rate, hosting metrics, and the agreed pilot population in the operational evidence record.
+
 ## Production promotion gate
 
 - Use a distinct database, object bucket, secrets, domain, and monitoring configuration from staging.
@@ -35,6 +50,7 @@ The current `render.yaml` is appropriate for a staging demonstration. A hospital
 - Confirm backups, retention, point-in-time recovery, and a successful restore drill.
 - Confirm encryption, least-privilege service identity, private bucket policy, log retention, and secret rotation owners.
 - Complete penetration testing, vendor-risk review, legal/BAA decisions, incident response, and customer go-live approval.
+- Assign every role in the [incident response runbook](INCIDENT_RESPONSE_RUNBOOK.md) and approve the [pilot support model](SUPPORT_OPERATIONS.md).
 - Deploy the exact commit validated in staging, apply migrations once, run smoke checks, and obtain written approval before importing customer workforce records.
 
 ## Rollback and recovery
