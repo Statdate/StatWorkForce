@@ -274,7 +274,7 @@ function WorkerCredentialsView() {
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No credentials on file yet.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => {
             const status = credentialStatus(item.expirationDate);
@@ -491,7 +491,7 @@ function ManagerCredentialExpirations() {
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No credentials on file for your units yet.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => {
             const status = credentialStatus(item.expirationDate);

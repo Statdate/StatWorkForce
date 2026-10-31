@@ -41,7 +41,7 @@ export default function MessageThreadsScreen() {
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No conversations yet.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => (
             <Pressable

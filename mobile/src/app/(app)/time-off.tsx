@@ -226,7 +226,7 @@ function WorkerTimeOffView() {
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No time off requests yet.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => {
             const status = statusStyle(item.status);

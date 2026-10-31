@@ -57,14 +57,14 @@ export default function NotificationsScreen() {
                   </ThemedText>
                 </Pressable>
               </ThemedView>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             !isLoading && !loadError ? (
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 Nothing yet — you&apos;re all caught up.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => (
             <ThemedView type="backgroundElement" style={styles.card}>

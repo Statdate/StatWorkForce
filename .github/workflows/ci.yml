@@ -51,6 +51,9 @@ jobs:
       - name: Install web dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Audit production web dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
       - name: Generate Prisma client
         run: npm run db:generate
 
@@ -99,6 +102,10 @@ jobs:
       - name: Install mobile dependencies
         working-directory: mobile
         run: npm ci --no-audit --no-fund
+
+      - name: Block critical/high mobile production advisories
+        working-directory: mobile
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck mobile
         working-directory: mobile
