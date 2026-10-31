@@ -53,7 +53,8 @@ test("administrator can navigate hospital controls", async ({ page }) => {
   expect(download.suggestedFilename()).toMatch(/^statworkforce-hospital-export-\d{4}-\d{2}-\d{2}\.json$/);
 });
 
-test("administrator can resolve an open call-in and see its audit event", async ({ page }) => {
+test("administrator can resolve an open call-in and see its audit event", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "State-changing workflow runs once against the shared CI database");
   await login(page, "10001");
   const matchingRows = page.getByRole("row").filter({ hasText: "Family emergency" });
   const initialCount = await matchingRows.count();

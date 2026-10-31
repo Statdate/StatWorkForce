@@ -57,8 +57,8 @@ jobs:
       - name: Generate Prisma client
         run: npm run db:generate
 
-      - name: Install browser test runtime
-        run: npx playwright install --with-deps chromium
+      - name: Install browser test runtimes
+        run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Apply migrations
         run: npm run db:migrate:deploy
@@ -94,7 +94,7 @@ jobs:
             sleep 1
           done
           npm run test:smoke
-          npm run test:e2e -- --project=chromium
+          npm run test:e2e
 
       - name: Verify database security invariants
         run: npm run test:invariants

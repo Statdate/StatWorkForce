@@ -34,6 +34,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Administrators can close hospital-scoped call-ins as covered/unresolved with atomic immutable audit records
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [x] Chromium browser critical paths cover anonymous access, invalid tenant login, worker, manager, administrator, navigation, and sign-out in CI
+- [x] Hosted CI is configured to repeat read-only critical paths and WCAG checks across Chromium, Firefox, and WebKit
 - [x] Automated WCAG A/AA scans and phone-viewport overflow regression checks run in CI
 - [ ] Mobile device regression pass on supported iOS and Android versions
 - [ ] Load test using the pilot's expected worker, unit, and schedule volumes
