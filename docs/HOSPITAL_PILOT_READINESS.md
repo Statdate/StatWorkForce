@@ -20,6 +20,7 @@ This checklist separates code readiness from the legal, operational, and custome
 - [x] Incident-response workflow, severity framework, breach-decision path, and pilot support operating template are documented
 - [ ] Browser-driven critical-path testing across Chrome, Safari, and Edge
 - [x] Chromium browser critical paths cover anonymous access, invalid tenant login, worker, manager, administrator, navigation, and sign-out in CI
+- [x] Automated WCAG A/AA scans and phone-viewport overflow regression checks run in CI
 - [ ] Mobile device regression pass on supported iOS and Android versions
 - [ ] Load test using the pilot's expected worker, unit, and schedule volumes
 - [x] Configurable authenticated read-only load harness enforces error-rate and p95 latency thresholds
