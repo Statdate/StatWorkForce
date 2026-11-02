@@ -58,6 +58,8 @@ This checklist separates code readiness from the legal, operational, and custome
 
 ## Required before external pilot launch
 
+Use the [founder external readiness workbook](FOUNDER_EXTERNAL_READINESS_WORKBOOK.md) and [external approval register](EXTERNAL_APPROVAL_REGISTER.md) to assign company accounts, spending authority, named owners, professional reviewers, and retained evidence.
+
 - [ ] Commit and peer-review the accumulated change set
 - [ ] Deploy to a non-production staging environment
 - [ ] Run the automated smoke suite against staging
