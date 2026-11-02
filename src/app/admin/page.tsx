@@ -1,30 +1,24 @@
-import Link from "next/link";
 import { getOrgOverview } from "@/lib/data/admin";
 import { getCurrentUser } from "@/lib/dal";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { AdminNav } from "@/components/admin-nav";
+import { resolveHospitalCallInAction } from "@/app/actions/admin-call-ins";
+import { ActionErrorBanner } from "@/components/action-error-banner";
 
-export default async function AdminPage() {
-  const [user, { hospital, units, openCallIns }] = await Promise.all([
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const [user, { hospital, units, openCallIns }, { error }] = await Promise.all([
     getCurrentUser(),
     getOrgOverview(),
+    searchParams,
   ]);
 
-  const nav = (
-    <div className="flex flex-wrap gap-2">
-      <span className="rounded-full bg-slate-900 px-3 py-1 text-sm text-white">Overview</span>
-      <Link
-        href="/admin/credentials"
-        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600 hover:bg-slate-200"
-      >
-        Credentials
-      </Link>
-    </div>
-  );
+  const nav = <AdminNav active="overview" />;
 
   return (
     <DashboardShell roleLabel="Admin" userName={`${user.firstName} ${user.lastName}`} nav={nav}>
       <h1 className="text-2xl font-semibold text-slate-900">{hospital.name}</h1>
       <p className="mt-1 text-sm text-slate-500">Org-wide overview across all units.</p>
+      <div className="mt-4"><ActionErrorBanner message={error} /></div>
 
       <section className="mt-8">
         <h2 className="text-lg font-medium text-slate-900">Units</h2>
@@ -53,7 +47,7 @@ export default async function AdminPage() {
 
       <section className="mt-10">
         <h2 className="text-lg font-medium text-slate-900">Open call-ins</h2>
-        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
           {openCallIns.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">No open call-ins right now.</p>
           ) : (
@@ -64,6 +58,7 @@ export default async function AdminPage() {
                   <th className="px-4 py-2">Shift</th>
                   <th className="px-4 py-2">Called in by</th>
                   <th className="px-4 py-2">Reason</th>
+                  <th className="px-4 py-2">Resolution</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,6 +73,19 @@ export default async function AdminPage() {
                       {callIn.reportedBy.firstName} {callIn.reportedBy.lastName}
                     </td>
                     <td className="px-4 py-2">{callIn.reason ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <form action={resolveHospitalCallInAction} className="flex min-w-64 flex-col gap-2">
+                        <input type="hidden" name="callInId" value={callIn.id} />
+                        <label className="text-xs text-slate-600">
+                          Resolution note (optional)
+                          <input name="notes" maxLength={500} className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+                        </label>
+                        <div className="flex gap-2">
+                          <button name="status" value="COVERED" className="rounded bg-emerald-700 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-600">Mark covered</button>
+                          <button name="status" value="UNRESOLVED" className="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Close unresolved</button>
+                        </div>
+                      </form>
+                    </td>
                   </tr>
                 ))}
               </tbody>

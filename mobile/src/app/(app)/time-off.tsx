@@ -226,7 +226,7 @@ function WorkerTimeOffView() {
               <ThemedText themeColor="textSecondary" style={styles.empty}>
                 No time off requests yet.
               </ThemedText>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => {
             const status = statusStyle(item.status);
@@ -314,7 +314,6 @@ const styles = StyleSheet.create({
 
 function ManagerTimeOffQueue() {
   const [requests, setRequests] = useState<ManagerTimeOffRequest[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -331,7 +330,7 @@ function ManagerTimeOffQueue() {
   }, []);
 
   useEffect(() => {
-    load().finally(() => setIsLoading(false));
+    load();
   }, [load]);
 
   async function onRefresh() {

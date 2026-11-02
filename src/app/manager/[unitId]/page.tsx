@@ -9,9 +9,15 @@ import {
   getUnitStaff,
   getSchedulePeriods,
   getScheduleRequestsForPeriod,
+  getManagerJobTypes,
 } from "@/lib/data/manager";
 import { approveTimeEntryAction, rejectTimeEntryAction } from "@/app/actions/timecards";
-import { publishSchedulePeriodAction } from "@/app/actions/schedulePeriods";
+import {
+  createShiftAction,
+  deleteDraftShiftAction,
+  publishSchedulePeriodAction,
+  updateDraftShiftAction,
+} from "@/app/actions/schedulePeriods";
 import { approveShiftPickupAction, rejectShiftPickupAction } from "@/app/actions/schedule";
 import {
   createScheduleRequestWindowAction,
@@ -19,6 +25,7 @@ import {
 } from "@/app/actions/schedule-requests";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { ActionErrorBanner } from "@/components/action-error-banner";
+import { formatDateTimeLocal } from "@/lib/scheduling-rules";
 
 function priorityBadgeClassName(rank: number | undefined) {
   if (rank === 1) return "bg-emerald-100 text-emerald-700";
@@ -45,17 +52,19 @@ export default async function ManagerUnitPage({
   const now = new Date();
   const twoWeeksOut = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  const [user, shifts, approvalQueue, pendingPickups, staff, schedulePeriods, { error }] = await Promise.all([
+  const [user, shifts, approvalQueue, pendingPickups, staff, schedulePeriods, jobTypes, { error }] = await Promise.all([
     getCurrentUser(),
     getUnitCensus(unitId, now, twoWeeksOut),
     getApprovalQueue(unitId),
     getPendingShiftPickups(unitId),
     getUnitStaff(unitId),
     getSchedulePeriods(unitId),
+    getManagerJobTypes(),
     searchParams,
   ]);
 
   const openPeriods = schedulePeriods.filter((p) => p.requestsOpen);
+  const draftPeriods = schedulePeriods.filter((p) => p.status === "DRAFT");
   const requestsByPeriod = new Map(
     await Promise.all(
       openPeriods.map(
@@ -124,6 +133,21 @@ export default async function ManagerUnitPage({
 
       <section className="mt-8">
         <h2 className="text-lg font-medium text-slate-900">Live census — next 14 days</h2>
+        {draftPeriods.length > 0 ? (
+          <form action={createShiftAction} className="mt-3 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-2 lg:grid-cols-4">
+            <input type="hidden" name="unitId" value={unitId} />
+            <label className="text-sm text-slate-700">Draft period<select name="schedulePeriodId" required className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2">{draftPeriods.map((period) => <option key={period.id} value={period.id}>{period.startDate.toLocaleDateString()} – {period.endDate.toLocaleDateString()}</option>)}</select></label>
+            <label className="text-sm text-slate-700">Job type<select name="jobTypeId" required className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2">{jobTypes.map((jobType) => <option key={jobType.id} value={jobType.id}>{jobType.name}</option>)}</select></label>
+            <label className="text-sm text-slate-700">Starts<input name="startLocal" type="datetime-local" required className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm text-slate-700">Ends<input name="endLocal" type="datetime-local" required className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm text-slate-700">Required staff<input name="requiredCount" type="number" min="1" max="100" defaultValue="1" required className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+            <label className="text-sm text-slate-700 lg:col-span-2">Notes (optional)<input name="notes" maxLength={500} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" /></label>
+            <div className="flex items-end"><button className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">Add shift</button></div>
+            <p className="text-xs text-slate-500 md:col-span-2 lg:col-span-4">Times use {user.hospital.timeZone}. Shifts can be up to 24 hours and must stay within the selected draft period.</p>
+          </form>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">Release a draft schedule period below before adding shifts.</p>
+        )}
         <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -132,6 +156,7 @@ export default async function ManagerUnitPage({
                 <th className="px-4 py-2">Role</th>
                 <th className="px-4 py-2">Filled</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -139,6 +164,32 @@ export default async function ManagerUnitPage({
                 <tr key={shift.id} className="border-t border-slate-100">
                   <td className="px-4 py-2">
                     {shift.startTime.toLocaleString()} – {shift.endTime.toLocaleTimeString()}
+                  </td>
+                  <td className="px-4 py-2">
+                    {shift.schedulePeriod?.status === "DRAFT" ? (
+                      <details className="relative">
+                        <summary className="cursor-pointer text-xs font-medium text-slate-700">Edit</summary>
+                        <div className="absolute right-0 z-10 mt-2 w-80 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+                          <form action={updateDraftShiftAction} className="space-y-2">
+                            <input type="hidden" name="shiftId" value={shift.id} />
+                            <input type="hidden" name="unitId" value={unitId} />
+                            <label className="block text-xs text-slate-700">Job type<select name="jobTypeId" defaultValue={shift.jobTypeId} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5">{jobTypes.map((jobType) => <option key={jobType.id} value={jobType.id}>{jobType.name}</option>)}</select></label>
+                            <label className="block text-xs text-slate-700">Starts<input name="startLocal" type="datetime-local" required defaultValue={formatDateTimeLocal(shift.startTime, user.hospital.timeZone)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
+                            <label className="block text-xs text-slate-700">Ends<input name="endLocal" type="datetime-local" required defaultValue={formatDateTimeLocal(shift.endTime, user.hospital.timeZone)} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
+                            <label className="block text-xs text-slate-700">Required staff<input name="requiredCount" type="number" min="1" max="100" required defaultValue={shift.requiredCount} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
+                            <label className="block text-xs text-slate-700">Notes<input name="notes" maxLength={500} defaultValue={shift.notes ?? ""} className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5" /></label>
+                            <button className="w-full rounded bg-slate-900 px-2 py-1.5 text-xs font-medium text-white">Save shift</button>
+                          </form>
+                          <form action={deleteDraftShiftAction} className="mt-2 border-t border-slate-100 pt-2">
+                            <input type="hidden" name="shiftId" value={shift.id} />
+                            <input type="hidden" name="unitId" value={unitId} />
+                            <button className="w-full rounded bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700">Delete unassigned shift</button>
+                          </form>
+                        </div>
+                      </details>
+                    ) : (
+                      <span className="text-xs text-slate-400">Published</span>
+                    )}
                   </td>
                   <td className="px-4 py-2">{shift.jobType.name}</td>
                   <td className="px-4 py-2">
@@ -165,7 +216,7 @@ export default async function ManagerUnitPage({
               ))}
               {shifts.length === 0 && (
                 <tr>
-                  <td className="px-4 py-4 text-slate-500" colSpan={4}>
+                  <td className="px-4 py-4 text-slate-500" colSpan={5}>
                     No shifts scheduled in this window yet.
                   </td>
                 </tr>
@@ -191,6 +242,7 @@ export default async function ManagerUnitPage({
                   <th className="px-4 py-2">Worker</th>
                   <th className="px-4 py-2">Shift</th>
                   <th className="px-4 py-2">Role</th>
+                  <th className="px-4 py-2">Projected hours</th>
                   <th className="px-4 py-2">Actions</th>
                 </tr>
               </thead>
@@ -205,6 +257,16 @@ export default async function ManagerUnitPage({
                       {pickup.shift.endTime.toLocaleTimeString()}
                     </td>
                     <td className="px-4 py-2">{pickup.shift.jobType.name}</td>
+                    <td className="px-4 py-2">
+                      <span className={pickup.workloadWarning ? "font-medium text-amber-700" : "text-slate-600"}>
+                        {pickup.projectedHours.toFixed(1)} hrs
+                      </span>
+                      {pickup.workloadWarning && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Review workload
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       <div className="flex gap-3">
                         <form action={approveShiftPickupAction}>

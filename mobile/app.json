@@ -8,12 +8,14 @@
     "scheme": "statworkforce",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "bundleIdentifier": "com.anonymous.statworkforce",
+      "bundleIdentifier": "com.statworkforce.mobile",
+      "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Stat Workforce uses Face ID to quickly and securely unlock the app."
       }
     },
     "android": {
+      "package": "com.statworkforce.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -23,9 +25,7 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "READ_CALENDAR",
-        "WRITE_CALENDAR",
-        "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "WRITE_CALENDAR"
       ]
     },
     "web": {

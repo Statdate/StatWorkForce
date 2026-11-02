@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ensureCredentialExpiryNotifications } from "@/lib/data/notifications";
+import { processPendingPushNotifications } from "@/lib/push";
 
 /**
  * Daily trigger for the credential-expiry sweep. Render's free tier has no
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
   const before = await prisma.notification.count();
   await ensureCredentialExpiryNotifications();
   const after = await prisma.notification.count();
+  const deliveriesProcessed = await processPendingPushNotifications();
 
-  return Response.json({ ok: true, notificationsCreated: after - before });
+  return Response.json({ ok: true, notificationsCreated: after - before, deliveriesProcessed });
 }

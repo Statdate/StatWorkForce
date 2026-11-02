@@ -129,14 +129,27 @@ export default async function WorkerSchedulePage({
                 <p className="text-xs text-slate-400">
                   {shift.jobType.name} · {shift.signedUpCount} / {shift.requiredCount} signed up
                 </p>
+                <p className={`text-xs ${shift.workloadWarning ? "font-medium text-amber-700" : "text-slate-400"}`}>
+                  Projected weekly workload: {shift.projectedHours.toFixed(1)} hours
+                  {shift.workloadWarning ? " · manager review recommended" : ""}
+                </p>
+                {shift.hasConflict && (
+                  <p className="text-xs font-medium text-red-700">Conflicts with an existing assignment</p>
+                )}
+                {!shift.credentialEligible && (
+                  <p className="text-xs font-medium text-red-700">
+                    Missing or expired: {shift.missingCredentialLabels.join(", ")}
+                  </p>
+                )}
               </div>
               <form action={signUpForShiftAction}>
                 <input type="hidden" name="shiftId" value={shift.id} />
                 <button
                   type="submit"
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+                  disabled={shift.hasConflict || !shift.credentialEligible}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  Sign up
+                  {shift.hasConflict ? "Conflict" : !shift.credentialEligible ? "Not eligible" : "Sign up"}
                 </button>
               </form>
             </div>

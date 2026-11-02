@@ -27,6 +27,9 @@ export function DashboardShell({
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-600">{userName}</span>
+            <Link href="/account/security" className="text-sm font-medium text-slate-500 hover:text-slate-900">
+              Security
+            </Link>
             <form action={logout}>
               <button
                 type="submit"

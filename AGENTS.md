@@ -38,10 +38,12 @@ Before any `tsc`/build after touching `mobile/`, and before touching
   gate; every Server Component/Action/Route Handler re-verifies via
   `src/lib/dal.ts` (`getCurrentUser()` web, `getApiUser()` mobile — returns
   null instead of redirecting, since a 302 makes no sense for a JSON API).
-  **Known gap:** `src/proxy.ts`'s `ROLE_PREFIXES` gates `/manager/*` to
-  `accountType === "MANAGER"` exactly — an ADMIN account gets redirected to
-  `/unauthorized` if it tries to open a manager's dashboard directly. Not
-  fixed as of the last session; ask before changing if it comes up.
+  `src/proxy.ts`'s `ROLE_PREFIXES` gates `/manager/*` to
+  `accountType === "MANAGER"` exactly. This is intentional: administrators
+  use hospital-wide admin screens instead of impersonating manager web UI,
+  while hospital-scoped manager APIs remain available for explicit admin
+  oversight/mobile workflows. See `docs/ROLE_BOUNDARY_DECISION.md`; changing
+  this boundary requires a reviewed product/security decision.
 - **Core-logic split pattern**: every user-facing data function has two
   forms — `doThing()` (web-only, calls `getCurrentUser()`/`requireRole()`
   itself) and `doThingForUser(user, ...)` / `doThingAsUser(user, ...)` (takes

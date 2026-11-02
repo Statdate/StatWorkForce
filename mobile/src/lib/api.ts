@@ -39,10 +39,10 @@ export type LoginResponse = {
   user: { id: string; firstName: string; lastName: string; accountType: string };
 };
 
-export function login(badgeNumber: string, password: string) {
+export function login(organizationCode: string, badgeNumber: string, password: string) {
   return request<LoginResponse>("/api/auth/token", {
     method: "POST",
-    body: JSON.stringify({ badgeNumber, password }),
+    body: JSON.stringify({ organizationCode, badgeNumber, password }),
   });
 }
 
@@ -221,7 +221,9 @@ export type OpenShift = {
   requiredCount: number;
   signedUpCount: number;
   unit: { name: string };
-  jobType: { name: string };
+  jobType: { id: string; name: string };
+  credentialEligible: boolean;
+  missingCredentialLabels: string[];
 };
 
 export function getOpenShifts() {
@@ -385,7 +387,7 @@ export type ManagerShift = {
   isUnderstaffed: boolean;
   isOverstaffed: boolean;
   unit: { id: string; name: string };
-  jobType: { name: string };
+  jobType: { id: string; name: string };
   assignments: ManagerShiftAssignment[];
 };
 
@@ -404,9 +406,9 @@ export type ManagerUnitWorker = {
   badgeNumber: string;
 };
 
-export function getUnitWorkers(unitId: string) {
+export function getUnitWorkers(unitId: string, jobTypeId: string) {
   return request<{ workers: ManagerUnitWorker[] }>(
-    `/api/manager/schedule/staff?unitId=${encodeURIComponent(unitId)}`
+    `/api/manager/schedule/staff?unitId=${encodeURIComponent(unitId)}&jobTypeId=${encodeURIComponent(jobTypeId)}`
   );
 }
 

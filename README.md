@@ -94,7 +94,8 @@ Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to
 
 ### Seeded test logins
 
-All seeded users share the password `Password123!`.
+All seeded users use hospital code `kaiser-la` and share the password
+`Password123!`.
 
 | Role            | Badge number | Notes                          |
 | --------------- | ------------ | ------------------------------- |
@@ -230,8 +231,9 @@ a fresh local database:
   withdraw, re-withdraw correctly rejected ("already reviewed"), and 401 for
   unauthenticated requests.
 
-Not yet exercised: admin call-in handling actions — those remain read-only
-in this pass.
+Administrators can resolve open call-ins as covered or unresolved from the
+hospital overview, with an optional operational note and an immutable audit
+event committed in the same transaction.
 
 ## Project structure
 
@@ -319,17 +321,22 @@ src/app/login/              Badge number + password login
    S3/R2 by replacing only `saveCredentialFileForUser` /
    `getCredentialFileForUser` in `src/lib/data/worker.ts` — nothing else
    touches the bytes.
-6. **Notification delivery — in-app done, push registration done, APNs
-   credentials are the one remaining step.** Credential-expiry reminders
+6. **Notification delivery — durable outbox done; APNs credentials are the
+   one remaining provider step.** Credential-expiry reminders
    exist as in-app notifications (idempotent sweep, 2 months before
    expiration, worker + unit managers) *and* as real push notifications via
-   Expo's push API (`src/lib/push.ts`), sent alongside every notification
-   the sweep creates. The daily trigger is a GitHub Actions scheduled
+   Expo's push API (`src/lib/push.ts`). Every in-app notification is also an
+   atomic delivery-outbox row. Delivery uses compare-and-set claims, retries
+   transient failures up to five times with exponential backoff, recovers
+   stale worker claims, and clears invalid device tokens. Admins can inspect
+   delivery counts and recent failures at `/admin/delivery`. The frequent
+   outbox drain is `.github/workflows/push-delivery.yml`; the daily trigger is
+   a GitHub Actions scheduled
    workflow (`.github/workflows/credential-sweep.yml`) calling `POST
    /api/cron/credential-sweep`, since Render's free tier has no built-in
    scheduler — this replaces the old load-triggered-only sweep (that still
-   runs too, as a fallback, whenever a notification page loads). Two
-   required env vars for the cron path: `CRON_SECRET`, set to the same
+   runs too, as a fallback, whenever a notification page loads). Both jobs
+   use `CRON_SECRET`, set to the same
    value in Render's dashboard and as a GitHub Actions repo secret
    (Settings → Secrets and variables → Actions) — **done, verified live**
    (the cron endpoint returns `{"ok":true,...}` on the production URL).
@@ -350,6 +357,10 @@ src/app/login/              Badge number + password login
    still an open choice if push isn't enough on its own.
 
 ## Deploying to Render
+
+For staging, production promotion, rollback, and retained evidence, follow the
+[Hospital Deployment Runbook](docs/DEPLOYMENT_RUNBOOK.md). Run
+`npm run deploy:preflight` before migrations or a remote build.
 
 Live at **https://statworkforce.onrender.com** (Blueprint-deployed from
 `render.yaml`: a free-tier web service + free-tier managed Postgres,
@@ -385,7 +396,8 @@ submodule, not an npm workspace — just a sibling project sharing the parent
 `.git`). It talks to the same backend as the web app via a small token-based
 API layer rather than the cookie-based web session:
 
-- `POST /api/auth/token` — badge number + password in, `{ token, user }` out.
+- `POST /api/auth/token` — hospital code + badge number + password in,
+  `{ token, user }` out.
   Same signed-JWT format as the web session (`src/lib/session.ts`), just
   handed back in a JSON body instead of an httpOnly cookie, since a mobile
   client stores it itself.

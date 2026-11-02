@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 
 export default function SignInScreen() {
   const { signIn } = useAuth();
+  const [organizationCode, setOrganizationCode] = useState('');
   const [badgeNumber, setBadgeNumber] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +19,7 @@ export default function SignInScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await signIn(badgeNumber.trim(), password);
+      await signIn(organizationCode.trim().toLowerCase(), badgeNumber.trim(), password);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Something went wrong. Try again.');
     } finally {
@@ -36,10 +37,19 @@ export default function SignInScreen() {
             Stat Workforce
           </ThemedText>
           <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-            Sign in with your badge number and password.
+            Sign in with your hospital code, badge number, and password.
           </ThemedText>
 
           <ThemedView type="backgroundElement" style={styles.form}>
+            <TextInput
+              placeholder="Hospital code"
+              accessibilityLabel="Hospital code"
+              value={organizationCode}
+              onChangeText={setOrganizationCode}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
             <TextInput
               placeholder="Badge number"
               accessibilityLabel="Badge number"
@@ -66,11 +76,11 @@ export default function SignInScreen() {
             )}
             <Pressable
               onPress={handleSignIn}
-              disabled={isSubmitting || !badgeNumber || !password}
+              disabled={isSubmitting || !organizationCode || !badgeNumber || !password}
               accessibilityRole="button"
               accessibilityLabel="Sign in"
-              accessibilityState={{ disabled: isSubmitting || !badgeNumber || !password }}
-              style={[styles.button, (isSubmitting || !badgeNumber || !password) && styles.buttonDisabled]}>
+              accessibilityState={{ disabled: isSubmitting || !organizationCode || !badgeNumber || !password }}
+              style={[styles.button, (isSubmitting || !organizationCode || !badgeNumber || !password) && styles.buttonDisabled]}>
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (

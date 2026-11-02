@@ -1,26 +1,23 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 
-// Brute-force lockout: N failed attempts against one badge number within a
-// window locks that badge out for a cooldown period. In-memory and
-// per-process — fine for this deploy (Render's free-tier web service is a
-// single long-running instance), but would need a shared store (e.g. Redis)
-// before scaling to multiple instances, and it resets on every deploy/restart.
+// Brute-force lockout: N failed attempts against one hospital-qualified badge
+// within a window locks it for a cooldown. State is database-backed so it is
+// shared across instances and survives restarts/deploys.
 const MAX_ATTEMPTS = 5;
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const LOCKOUT_MS = 15 * 60 * 1000;
-
-type AttemptRecord = { count: number; windowStartedAt: number; lockedUntil: number | null };
-const loginAttempts = new Map<string, AttemptRecord>();
 
 // A fixed, valid bcrypt hash (of an arbitrary string, salt rounds matching
 // src/lib/password.ts) that never matches any real password — used so a
 // lookup for a non-existent badge number still pays the bcrypt cost below.
 const DUMMY_HASH = "$2b$12$79i11urWWSWUuWNU7fxgZu3t5hslfqIMSJY0mZpOChPaTF461UNt2";
 
-function attemptKey(badgeNumber: string) {
-  return badgeNumber.trim().toLowerCase();
+export function loginAttemptKeyHash(organizationCode: string, badgeNumber: string) {
+  const normalized = `${organizationCode.trim().toLowerCase()}:${badgeNumber.trim().toLowerCase()}`;
+  return createHash("sha256").update(normalized).digest("hex");
 }
 
 function secondsUntil(timestamp: number) {
@@ -32,20 +29,29 @@ export type AuthResult =
   | { ok: false; reason: "invalid" }
   | { ok: false; reason: "locked"; retryAfterSeconds: number };
 
-/**
- * Badge numbers are unique per-hospital, not globally. This scaffold
- * resolves login by badge number alone (single-tenant assumption) — see
- * README "Decisions needed" for the multi-hospital login question.
- */
-export async function authenticateUser(badgeNumber: string, password: string): Promise<AuthResult> {
-  const key = attemptKey(badgeNumber);
-  const existing = loginAttempts.get(key);
-  if (existing?.lockedUntil && existing.lockedUntil > Date.now()) {
-    return { ok: false, reason: "locked", retryAfterSeconds: secondsUntil(existing.lockedUntil) };
+/** Badge numbers are unique per hospital. The organization code is mandatory
+ * so an identity can never be resolved by scanning across tenants. */
+export async function authenticateUser(
+  organizationCode: string,
+  badgeNumber: string,
+  password: string
+): Promise<AuthResult> {
+  const keyHash = loginAttemptKeyHash(organizationCode, badgeNumber);
+  const existing = await prisma.loginThrottle.findUnique({ where: { keyHash } });
+  if (existing?.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
+    return {
+      ok: false,
+      reason: "locked",
+      retryAfterSeconds: secondsUntil(existing.lockedUntil.getTime()),
+    };
   }
 
   const user = await prisma.user.findFirst({
-    where: { badgeNumber, isActive: true },
+    where: {
+      badgeNumber,
+      isActive: true,
+      hospital: { code: organizationCode.trim().toLowerCase() },
+    },
   });
   // Always run the bcrypt compare, even for a badge number that doesn't
   // exist — against a fixed dummy hash so a non-existent badge takes the
@@ -55,17 +61,20 @@ export async function authenticateUser(badgeNumber: string, password: string): P
 
   if (!user || !passwordMatches) {
     const now = Date.now();
-    const record =
-      existing && now - existing.windowStartedAt < ATTEMPT_WINDOW_MS
-        ? existing
-        : { count: 0, windowStartedAt: now, lockedUntil: null };
-    record.count += 1;
-    if (record.count >= MAX_ATTEMPTS) record.lockedUntil = now + LOCKOUT_MS;
-    loginAttempts.set(key, record);
+    const withinWindow =
+      existing && now - existing.windowStartedAt.getTime() < ATTEMPT_WINDOW_MS;
+    const failedCount = (withinWindow ? existing.failedCount : 0) + 1;
+    const windowStartedAt = withinWindow ? existing.windowStartedAt : new Date(now);
+    const lockedUntil = failedCount >= MAX_ATTEMPTS ? new Date(now + LOCKOUT_MS) : null;
+    await prisma.loginThrottle.upsert({
+      where: { keyHash },
+      update: { failedCount, windowStartedAt, lockedUntil },
+      create: { keyHash, failedCount, windowStartedAt, lockedUntil },
+    });
     return { ok: false, reason: "invalid" };
   }
 
-  loginAttempts.delete(key);
+  await prisma.loginThrottle.deleteMany({ where: { keyHash } });
   return { ok: true, user };
 }
 

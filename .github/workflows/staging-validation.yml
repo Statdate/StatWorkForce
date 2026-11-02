@@ -1,0 +1,45 @@
+name: Validate staging deployment
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    env:
+      MONITOR_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      SMOKE_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      SMOKE_ORG_CODE: ${{ secrets.STAGING_SMOKE_ORG_CODE }}
+      SMOKE_WORKER_BADGE: ${{ secrets.STAGING_SMOKE_WORKER_BADGE }}
+      SMOKE_WORKER_PASSWORD: ${{ secrets.STAGING_SMOKE_WORKER_PASSWORD }}
+      SMOKE_ADMIN_BADGE: ${{ secrets.STAGING_SMOKE_ADMIN_BADGE }}
+      SMOKE_ADMIN_PASSWORD: ${{ secrets.STAGING_SMOKE_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate required staging configuration
+        run: |
+          test -n "$MONITOR_BASE_URL"
+          test -n "$SMOKE_ORG_CODE"
+          test -n "$SMOKE_WORKER_BADGE"
+          test -n "$SMOKE_WORKER_PASSWORD"
+          test -n "$SMOKE_ADMIN_BADGE"
+          test -n "$SMOKE_ADMIN_PASSWORD"
+      - name: Check liveness and database readiness
+        run: npm run monitor:check
+      - name: Run authenticated staging release checks
+        run: npm run test:smoke

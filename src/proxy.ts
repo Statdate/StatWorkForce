@@ -34,6 +34,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  if (session.mustChangePassword && pathname !== "/change-password") {
+    return NextResponse.redirect(new URL("/change-password", request.url));
+  }
+  if (!session.mustChangePassword && pathname === "/change-password") {
+    const destination = session.accountType === "ADMIN" ? "/admin" : session.accountType === "MANAGER" ? "/manager" : "/worker";
+    return NextResponse.redirect(new URL(destination, request.url));
+  }
+
   const matchedPrefix = Object.keys(ROLE_PREFIXES).find((prefix) =>
     pathname.startsWith(prefix)
   );

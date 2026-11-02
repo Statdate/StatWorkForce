@@ -28,7 +28,7 @@ type AuthContextValue = {
   // unlock() succeeds. Never true right after a fresh signIn(): typing the
   // password already proved identity for this app open.
   isLocked: boolean;
-  signIn: (badgeNumber: string, password: string) => Promise<void>;
+  signIn: (organizationCode: string, badgeNumber: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   unlock: () => Promise<boolean>;
 };
@@ -59,8 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  async function signIn(badgeNumber: string, password: string) {
-    const { token, user: loggedInUser } = await apiLogin(badgeNumber, password);
+  async function signIn(organizationCode: string, badgeNumber: string, password: string) {
+    const { token, user: loggedInUser } = await apiLogin(organizationCode, badgeNumber, password);
     await setItem(TOKEN_KEY, token);
     const me = await getMe();
     setUser(me ?? { ...loggedInUser, badgeNumber });

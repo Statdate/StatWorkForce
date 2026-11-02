@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: statworkforce_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d statworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/statworkforce_test?schema=public
+      SESSION_SECRET: ci-only-session-secret-not-used-outside-this-job
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPO_NO_TELEMETRY: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production web dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Install browser test runtimes
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Apply migrations
+        run: npm run db:migrate:deploy
+
+      - name: Seed validation database
+        run: npm run db:seed
+
+      - name: Lint web
+        run: npm run lint
+
+      - name: Test web
+        run: npm test
+
+      - name: Typecheck web
+        run: npx tsc --noEmit
+
+      - name: Build web
+        run: npm run build
+
+      - name: Smoke-test production server
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3000 node .next/standalone/server.js >/tmp/statworkforce-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              cat /tmp/statworkforce-server.log
+              exit 1
+            fi
+            sleep 1
+          done
+          npm run test:smoke
+          npm run test:e2e
+
+      - name: Verify database security invariants
+        run: npm run test:invariants
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+
+      - name: Block critical/high mobile production advisories
+        working-directory: mobile
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Typecheck mobile
+        working-directory: mobile
+        run: npx tsc --noEmit
+
+      - name: Lint mobile
+        working-directory: mobile
+        run: npm run lint
+
+      - name: Export mobile web build
+        working-directory: mobile
+        run: npx expo export --platform web --output-dir /tmp/statworkforce-mobile-dist

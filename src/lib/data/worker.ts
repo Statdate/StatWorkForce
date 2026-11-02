@@ -2,7 +2,22 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, scopedUnitIds, type CurrentUser } from "@/lib/dal";
 import { CredentialType, TimeOffType } from "@/generated/prisma/enums";
-import { sendPushToUser } from "@/lib/push";
+import { deliverPushNotification } from "@/lib/push";
+import {
+  deleteCredentialObject,
+  getCredentialObject,
+  putCredentialObject,
+  usesCredentialObjectStorage,
+} from "@/lib/credential-storage";
+import { recordAuditEvent } from "@/lib/audit";
+import { checkAssignmentSafety, withSchedulingTransaction } from "@/lib/schedule-assignment";
+import { CREDENTIAL_TYPE_LABELS } from "@/lib/credential-types";
+import {
+  durationHours,
+  intervalsOverlap,
+  scheduledHoursInWindow,
+  workWeek,
+} from "@/lib/scheduling-rules";
 
 /** A worker only ever sees their own assignments/credentials — enforced by
  * always filtering on the verified session's userId, never a client-supplied id. */
@@ -52,10 +67,14 @@ export async function getOpenShiftsForUser(user: CurrentUser) {
   if (unitIds.length === 0) return [];
 
   const shifts = await prisma.shift.findMany({
-    where: { unitId: { in: unitIds }, startTime: { gte: new Date() } },
+    where: {
+      unitId: { in: unitIds },
+      jobTypeId: user.jobType?.id ?? "__no_matching_job_type__",
+      startTime: { gte: new Date() },
+    },
     include: {
       unit: { select: { name: true } },
-      jobType: { select: { name: true } },
+      jobType: { select: { name: true, requiredCredentialTypes: true } },
       assignments: {
         where: { status: { not: "DROPPED" } },
         select: { userId: true },
@@ -64,12 +83,64 @@ export async function getOpenShiftsForUser(user: CurrentUser) {
     orderBy: { startTime: "asc" },
   });
 
+  if (shifts.length === 0) return [];
+  const windows = shifts.map(({ startTime }) =>
+    workWeek(startTime, user.hospital.timeZone, user.hospital.weekStartsOn)
+  );
+  const rangeStart = new Date(Math.min(...windows.map(({ start }) => start.getTime())));
+  const rangeEnd = new Date(Math.max(...windows.map(({ end }) => end.getTime())));
+  const [existingAssignments, credentials] = await Promise.all([
+    prisma.scheduleAssignment.findMany({
+      where: {
+        userId: user.id,
+        status: { not: "DROPPED" },
+        shift: { startTime: { lt: rangeEnd }, endTime: { gt: rangeStart } },
+      },
+      select: { shift: { select: { startTime: true, endTime: true } } },
+    }),
+    prisma.credential.findMany({
+      where: { userId: user.id },
+      select: { type: true, expirationDate: true },
+    }),
+  ]);
+
   return shifts
-    .filter((shift) => !shift.assignments.some((a) => a.userId === user.id))
-    .map((shift) => ({
-      ...shift,
-      signedUpCount: shift.assignments.length,
-    }));
+    .filter(
+      (shift) =>
+        !shift.assignments.some((a) => a.userId === user.id) &&
+        shift.assignments.length < shift.requiredCount
+    )
+    .map((shift) => {
+      const week = workWeek(
+        shift.startTime,
+        user.hospital.timeZone,
+        user.hospital.weekStartsOn
+      );
+      const hasConflict = existingAssignments.some(({ shift: assignedShift }) =>
+        intervalsOverlap(shift, assignedShift)
+      );
+      const projectedHours =
+        scheduledHoursInWindow(existingAssignments.map(({ shift: range }) => range), week) +
+        durationHours(shift);
+      const missingCredentialTypes = shift.jobType.requiredCredentialTypes.filter(
+        (type) =>
+          !credentials.some(
+            (credential) =>
+              credential.type === type && credential.expirationDate >= shift.endTime
+          )
+      );
+      return {
+        ...shift,
+        signedUpCount: shift.assignments.length,
+        projectedHours,
+        workloadWarning: projectedHours > user.hospital.weeklyHoursWarning,
+        workloadWarningThreshold: user.hospital.weeklyHoursWarning,
+        hasConflict,
+        missingCredentialTypes,
+        missingCredentialLabels: missingCredentialTypes.map((type) => CREDENTIAL_TYPE_LABELS[type]),
+        credentialEligible: missingCredentialTypes.length === 0,
+      };
+    });
 }
 
 export async function signUpForShift(shiftId: string) {
@@ -90,27 +161,35 @@ export async function signUpForShiftAsUser(user: CurrentUser, shiftId: string) {
   if (!unitIds.includes(shift.unitId)) {
     throw new Error("You aren't assigned to this unit");
   }
-
-  await prisma.scheduleAssignment.upsert({
-    where: { shiftId_userId: { shiftId, userId: user.id } },
-    update: { status: "SELF_SCHEDULED" },
-    create: { shiftId, userId: user.id, status: "SELF_SCHEDULED" },
-  });
-
-  // SELF_SCHEDULED is a pending pickup, not a final one — notify the unit's
-  // managers so they can approve/reject before it risks accruing overtime.
-  const managers = await prisma.user.findMany({
-    where: { accountType: "MANAGER", isActive: true, unitMemberships: { some: { unitId: shift.unitId } } },
-    select: { id: true },
-  });
-  const title = `${user.firstName} ${user.lastName} wants to pick up a shift`;
-  const body = `${shift.startTime.toLocaleString()} – ${shift.endTime.toLocaleTimeString()}. Review it in the schedule.`;
-  for (const manager of managers) {
-    await prisma.notification.create({
-      data: { userId: manager.id, type: "SHIFT_PICKUP_REQUESTED", title, body },
-    });
-    await sendPushToUser(manager.id, title, body);
+  if (!user.jobType || user.jobType.id !== shift.jobTypeId) {
+    throw new Error("This shift requires a different job qualification");
   }
+
+  const title = `${user.firstName} ${user.lastName} wants to pick up a shift`;
+  const notificationIds = await withSchedulingTransaction(async (tx) => {
+    const safety = await checkAssignmentSafety(tx, { userId: user.id, shiftId });
+    await tx.scheduleAssignment.upsert({
+      where: { shiftId_userId: { shiftId, userId: user.id } },
+      update: { status: "SELF_SCHEDULED" },
+      create: { shiftId, userId: user.id, status: "SELF_SCHEDULED" },
+    });
+
+    const managers = await tx.user.findMany({
+      where: { accountType: "MANAGER", isActive: true, unitMemberships: { some: { unitId: shift.unitId } } },
+      select: { id: true },
+    });
+    const workload = safety.workloadWarning
+      ? ` Projected scheduled workload is ${safety.projectedHours.toFixed(1)} hours this week.`
+      : "";
+    const body = `${shift.startTime.toLocaleString()} – ${shift.endTime.toLocaleTimeString()}.${workload} Review it in the schedule.`;
+    const notifications = await Promise.all(
+      managers.map(({ id: userId }) =>
+        tx.notification.create({ data: { userId, type: "SHIFT_PICKUP_REQUESTED", title, body } })
+      )
+    );
+    return notifications.map(({ id }) => id);
+  });
+  await Promise.all(notificationIds.map(deliverPushNotification));
 }
 
 export async function getMyCredentials() {
@@ -192,7 +271,7 @@ export async function addCredentialForUser(userId: string, input: NewCredentialI
 
   if (input.file) validateCredentialFile(input.file);
 
-  return prisma.credential.create({
+  const credential = await prisma.credential.create({
     data: {
       userId,
       type,
@@ -200,15 +279,19 @@ export async function addCredentialForUser(userId: string, input: NewCredentialI
       issuingBody: input.issuingBody?.trim() || null,
       credentialNumber: input.credentialNumber?.trim() || null,
       expirationDate,
-      ...(input.file
-        ? {
-            fileName: input.file.name,
-            fileMimeType: input.file.mimeType,
-            fileData: input.file.data,
-            fileUploadedAt: new Date(),
-          }
-        : {}),
     },
+    omit: { fileData: true },
+  });
+  if (input.file) {
+    try {
+      await saveCredentialFileForUser(userId, credential.id, input.file);
+    } catch (error) {
+      await prisma.credential.delete({ where: { id: credential.id } });
+      throw error;
+    }
+  }
+  return prisma.credential.findUniqueOrThrow({
+    where: { id: credential.id },
     omit: { fileData: true },
   });
 }
@@ -228,33 +311,100 @@ export async function saveCredentialFileForUser(
 ) {
   validateCredentialFile(file);
 
-  // updateMany so the ownership check (userId in the where) and the write are
-  // a single query — a worker can never attach a file to someone else's
-  // credential, even with a guessed id.
-  const result = await prisma.credential.updateMany({
+  const credential = await prisma.credential.findFirst({
     where: { id: credentialId, userId },
-    data: {
-      fileName: file.name,
-      fileMimeType: file.mimeType,
-      fileData: file.data,
-      fileUploadedAt: new Date(),
-    },
+    select: { id: true, storageKey: true, user: { select: { hospitalId: true } } },
   });
-  if (result.count === 0) {
-    throw new Error("Credential not found");
+  if (!credential) throw new Error("Credential not found");
+
+  if (usesCredentialObjectStorage()) {
+    const newKey = await putCredentialObject({
+      hospitalId: credential.user.hospitalId,
+      credentialId,
+      mimeType: file.mimeType,
+      data: file.data,
+    });
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.credential.update({
+          where: { id: credentialId },
+          data: {
+            fileName: file.name,
+            fileMimeType: file.mimeType,
+            fileData: null,
+            storageProvider: "s3",
+            storageKey: newKey,
+            fileUploadedAt: new Date(),
+          },
+        });
+        await recordAuditEvent(
+          {
+            hospitalId: credential.user.hospitalId,
+            actorId: userId,
+            action: "CREDENTIAL_DOCUMENT_UPLOADED",
+            resourceType: "Credential",
+            resourceId: credentialId,
+            metadata: { storageProvider: "s3", mimeType: file.mimeType },
+          },
+          tx
+        );
+      });
+    } catch (error) {
+      await deleteCredentialObject(newKey).catch(() => undefined);
+      throw error;
+    }
+    if (credential.storageKey) {
+      await deleteCredentialObject(credential.storageKey).catch(() => undefined);
+    }
+    return;
   }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.credential.update({
+      where: { id: credentialId },
+      data: {
+        fileName: file.name,
+        fileMimeType: file.mimeType,
+        fileData: file.data,
+        storageProvider: null,
+        storageKey: null,
+        fileUploadedAt: new Date(),
+      },
+    });
+    await recordAuditEvent(
+      {
+        hospitalId: credential.user.hospitalId,
+        actorId: userId,
+        action: "CREDENTIAL_DOCUMENT_UPLOADED",
+        resourceType: "Credential",
+        resourceId: credentialId,
+        metadata: { storageProvider: "database", mimeType: file.mimeType },
+      },
+      tx
+    );
+  });
 }
 
 export async function getCredentialFileForUser(userId: string, credentialId: string) {
   const credential = await prisma.credential.findFirst({
     where: { id: credentialId, userId },
-    select: { fileName: true, fileMimeType: true, fileData: true },
+    select: {
+      fileName: true,
+      fileMimeType: true,
+      fileData: true,
+      storageKey: true,
+      user: { select: { hospitalId: true } },
+    },
   });
-  if (!credential?.fileData || !credential.fileMimeType) return null;
+  if (!credential?.fileMimeType) return null;
+  const data = credential.storageKey
+    ? await getCredentialObject(credential.storageKey, credential.user.hospitalId)
+    : credential.fileData;
+  if (!data) return null;
   return {
     fileName: credential.fileName ?? "credential",
     mimeType: credential.fileMimeType,
-    data: credential.fileData,
+    data,
   };
 }
 
@@ -267,12 +417,13 @@ export async function getCredentialFileForViewer(viewer: CurrentUser, credential
       fileName: true,
       fileMimeType: true,
       fileData: true,
+      storageKey: true,
       user: {
         select: { id: true, hospitalId: true, unitMemberships: { select: { unitId: true } } },
       },
     },
   });
-  if (!credential?.fileData || !credential.fileMimeType) return null;
+  if (!credential?.fileMimeType) return null;
 
   const owner = credential.user;
   const isOwner = owner.id === viewer.id;
@@ -285,10 +436,15 @@ export async function getCredentialFileForViewer(viewer: CurrentUser, credential
 
   if (!isOwner && !isAdmin && !isManagerOfWorker) return null;
 
+  const data = credential.storageKey
+    ? await getCredentialObject(credential.storageKey, owner.hospitalId)
+    : credential.fileData;
+  if (!data) return null;
+
   return {
     fileName: credential.fileName ?? "credential",
     mimeType: credential.fileMimeType,
-    data: credential.fileData,
+    data,
   };
 }
 

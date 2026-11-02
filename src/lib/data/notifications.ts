@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { credentialDisplayName, EXPIRING_SOON_MS } from "@/lib/credential-types";
-import { sendPushToUser } from "@/lib/push";
+import { deliverPushNotification } from "@/lib/push";
 
 /**
  * Creates the "credential expiring in 2 months" notifications for workers and
@@ -74,19 +74,14 @@ export async function ensureCredentialExpiryNotifications() {
     const workerName = `${credential.user.firstName} ${credential.user.lastName}`;
 
     const now = new Date();
-    const ops = [];
-    // Push sends happen after the transaction commits (they're an external
-    // HTTP call, not something that belongs inside a DB transaction) — queued
-    // here alongside the matching Notification row.
-    const pushSends: { userId: string; title: string; body: string }[] = [];
-
-    if (!credential.workerReminderSentAt) {
-      const title = expired ? `Your ${name} has expired` : `Your ${name} expires on ${dateText}`;
-      const body = expired
-        ? `It expired on ${dateText}. Renew it and upload the new document.`
-        : "Renew it before then and upload the new document.";
-      ops.push(
-        prisma.notification.create({
+    const notificationIds = await prisma.$transaction(async (tx) => {
+      const createdIds: string[] = [];
+      if (!credential.workerReminderSentAt) {
+        const title = expired ? `Your ${name} has expired` : `Your ${name} expires on ${dateText}`;
+        const body = expired
+          ? `It expired on ${dateText}. Renew it and upload the new document.`
+          : "Renew it before then and upload the new document.";
+        const notification = await tx.notification.create({
           data: {
             userId: credential.user.id,
             type: "CREDENTIAL_EXPIRING_WORKER",
@@ -94,21 +89,19 @@ export async function ensureCredentialExpiryNotifications() {
             body,
             payload: { credentialId: credential.id },
           },
-        })
-      );
-      pushSends.push({ userId: credential.user.id, title, body });
-    }
+        });
+        createdIds.push(notification.id);
+      }
 
-    if (!credential.managerReminderSentAt) {
-      const unitIds = credential.user.unitMemberships.map((m) => m.unitId);
-      const managerIds = [...new Set(unitIds.flatMap((unitId) => managersByUnit.get(unitId) ?? []))];
-      for (const managerId of managerIds) {
-        const title = expired
-          ? `${workerName}'s ${name} has expired`
-          : `${workerName}'s ${name} expires on ${dateText}`;
-        const body = `Badge #${credential.user.badgeNumber}. See the unit credentials page for the full list.`;
-        ops.push(
-          prisma.notification.create({
+      if (!credential.managerReminderSentAt) {
+        const unitIds = credential.user.unitMemberships.map((m) => m.unitId);
+        const managerIds = [...new Set(unitIds.flatMap((unitId) => managersByUnit.get(unitId) ?? []))];
+        for (const managerId of managerIds) {
+          const title = expired
+            ? `${workerName}'s ${name} has expired`
+            : `${workerName}'s ${name} expires on ${dateText}`;
+          const body = `Badge #${credential.user.badgeNumber}. See the unit credentials page for the full list.`;
+          const notification = await tx.notification.create({
             data: {
               userId: managerId,
               type: "CREDENTIAL_EXPIRING_MANAGER",
@@ -116,24 +109,22 @@ export async function ensureCredentialExpiryNotifications() {
               body,
               payload: { credentialId: credential.id, workerId: credential.user.id },
             },
-          })
-        );
-        pushSends.push({ userId: managerId, title, body });
+          });
+          createdIds.push(notification.id);
+        }
       }
-    }
 
-    ops.push(
-      prisma.credential.update({
+      await tx.credential.update({
         where: { id: credential.id },
         data: {
           ...(credential.workerReminderSentAt ? {} : { workerReminderSentAt: now }),
           ...(credential.managerReminderSentAt ? {} : { managerReminderSentAt: now }),
         },
-      })
-    );
+      });
+      return createdIds;
+    });
 
-    await prisma.$transaction(ops);
-    await Promise.all(pushSends.map((p) => sendPushToUser(p.userId, p.title, p.body)));
+    await Promise.all(notificationIds.map(deliverPushNotification));
   }
 }
 

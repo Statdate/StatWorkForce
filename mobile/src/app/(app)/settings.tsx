@@ -272,7 +272,7 @@ export default function SettingsScreen() {
                     <ThemedText type="small" themeColor="textSecondary">
                       No other calendars found on this device.
                     </ThemedText>
-                  ) : null
+                  ) : undefined
                 }
                 renderItem={({ item }) => (
                   <Pressable style={styles.calendarOption} onPress={() => handleSelectCalendar(item)}>
